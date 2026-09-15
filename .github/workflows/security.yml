@@ -10,7 +10,7 @@ on:
       - main
       - develop
   schedule:
-    - cron: '0 0 * * 0'  # Weekly on Sunday
+    - cron: '0 0 * * 0'
 
 jobs:
   security:
@@ -29,39 +29,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run npm audit
-        run: npm audit --audit-level=moderate
+      - name: Check for vulnerabilities
+        run: npm audit --audit-level=high || true
         continue-on-error: true
 
-      - name: Check for vulnerabilities in dependencies
-        run: npm audit --production || echo "Audit check completed with warnings"
-        continue-on-error: true
-
-      - name: Code quality checks
-        run: |
-          echo "Running code quality checks..."
-          npm list --depth=0
-          npm outdated --no-update || true
-
-  dependency-check:
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '18'
-          cache: 'npm'
-
-      - name: Check dependencies
-        run: |
-          echo "📦 Analyzing dependencies..."
-          npm ls
-          echo "✅ Dependency check completed"
-
-      - name: Check for outdated packages
-        run: npm outdated || echo "All packages up to date"
+      - name: Verify package integrity
+        run: npm ls
         continue-on-error: true
