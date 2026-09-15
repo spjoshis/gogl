@@ -1,6 +1,6 @@
 import { chromium } from 'playwright';
 
-export async function search(query) {
+async function searchOnce(query) {
   if (!query || query.trim() === '') {
     return [];
   }
@@ -56,6 +56,19 @@ export async function search(query) {
   } finally {
     if (browser) {
       await browser.close();
+    }
+  }
+}
+
+export async function search(query, maxRetries = 2) {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      return await searchOnce(query);
+    } catch (error) {
+      if (attempt === maxRetries) {
+        throw error;
+      }
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
     }
   }
 }

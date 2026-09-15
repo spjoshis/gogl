@@ -21,7 +21,13 @@ async function main() {
 
     console.log(formatted);
   } catch (error) {
-    console.error('Error:', error.message);
+    if (error.message.includes('timeout')) {
+      console.error('Error: Search timed out. Please try again.');
+    } else if (error.message.includes('network')) {
+      console.error('Error: Network error. Please check your connection.');
+    } else {
+      console.error('Error:', error.message);
+    }
     process.exit(1);
   }
 }
