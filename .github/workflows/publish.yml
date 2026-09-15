@@ -48,7 +48,7 @@ jobs:
           echo "Current version: $CURRENT_VERSION"
 
       - name: Publish to npm
-        run: npm publish --provenance
+        run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         if: success()
