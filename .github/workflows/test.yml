@@ -33,6 +33,7 @@ jobs:
 
       - name: Install Playwright browsers
         run: npx playwright install
+        timeout-minutes: 15
 
       - name: Run linter (if available)
         run: npm run lint --if-present
@@ -48,6 +49,7 @@ jobs:
           files: ./coverage/coverage-final.json
           flags: unittests
           name: codecov-umbrella
+          fail_ci_if_error: false
         continue-on-error: true
 
       - name: Test result summary
