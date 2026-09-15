@@ -8,7 +8,7 @@
     "@google": "./bin/gogl.js"
   },
   "scripts": {
-    "test": "jest",
+    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js",
     "start": "node bin/gogl.js"
   },
   "keywords": ["google", "search", "cli", "playwright", "terminal"],
