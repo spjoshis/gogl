@@ -1,0 +1,26 @@
+{
+  "name": "@spjoshis/gogl",
+  "version": "1.0.0",
+  "description": "Ask anything to google from terminal",
+  "type": "module",
+  "main": "src/index.js",
+  "bin": {
+    "@google": "./bin/gogl.js"
+  },
+  "scripts": {
+    "test": "jest",
+    "start": "node bin/gogl.js"
+  },
+  "keywords": ["google", "search", "cli", "playwright", "terminal"],
+  "author": "Sameer",
+  "license": "MIT",
+  "dependencies": {
+    "playwright": "^1.40.0"
+  },
+  "devDependencies": {
+    "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
