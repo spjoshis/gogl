@@ -1,4 +1,8 @@
-export function formatResults(results) {
+export function formatResults(results, options = {}) {
+  if (options.json) {
+    return JSON.stringify(results ?? [], null, 2);
+  }
+
   if (!results || results.length === 0) {
     return 'No results found.';
   }

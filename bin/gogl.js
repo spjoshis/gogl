@@ -1,23 +1,77 @@
 #!/usr/bin/env node
 
+import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+
 import { search } from '../src/index.js';
-import { parseArgs } from '../src/parser.js';
+import { parseArgs, MAX_RESULTS } from '../src/parser.js';
 import { formatResults } from '../src/formatter.js';
 
-async function main() {
-  try {
-    const { query } = parseArgs(process.argv.slice(2));
+const HELP_TEXT = `Usage: @google [options] <query>
 
-    if (!query) {
-      console.error('Usage: @google <query>');
-      console.error('Example: @google what\'s today\'s date');
-      process.exit(1);
+Ask anything to Google from your terminal.
+
+Options:
+  -n, --results <count>   Number of results to return (1-20, default 10)
+      --json              Output results as JSON (to stdout)
+  -h, --help              Show this help and exit
+  -v, --version           Show version and exit
+  --                      Treat all following arguments as the query
+
+Examples:
+  @google what is javascript
+  @google -n 5 nodejs streams
+  @google --json "rust async" | jq '.[0].url'`;
+
+function getVersion() {
+  const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
+  const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
+  return pkg.version;
+}
+
+async function main() {
+  let options;
+  try {
+    options = parseArgs(process.argv.slice(2));
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+    console.error('Run "@google --help" for usage.');
+    process.exit(1);
+  }
+
+  if (options.help) {
+    console.log(HELP_TEXT);
+    process.exit(0);
+  }
+
+  if (options.version) {
+    console.log(getVersion());
+    process.exit(0);
+  }
+
+  if (!options.query) {
+    console.error('Usage: @google <query>');
+    console.error('Example: @google what\'s today\'s date');
+    process.exit(1);
+  }
+
+  if (options.clamped) {
+    console.error(
+      `Note: --results capped at ${MAX_RESULTS} (Google returns a limited number of results per page).`
+    );
+  }
+
+  try {
+    // Keep stdout clean for JSON so it can be piped; progress goes to stderr.
+    const banner = `\nSearching Google for: "${options.query}"\n`;
+    if (options.json) {
+      console.error(banner);
+    } else {
+      console.log(banner);
     }
 
-    console.log(`\nSearching Google for: "${query}"\n`);
-
-    const results = await search(query);
-    const formatted = formatResults(results);
+    const results = await search(options.query, { results: options.results });
+    const formatted = formatResults(results, { json: options.json });
 
     console.log(formatted);
   } catch (error) {
