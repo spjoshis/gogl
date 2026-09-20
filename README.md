@@ -58,8 +58,27 @@ npx @spjoshis/gogl "your query"
 ### Basic Syntax
 
 ```bash
-@google <query>
+@google [options] <query>
 ```
+
+### Options
+
+| Option | Description |
+|--------|-------------|
+| `-n, --results <count>` | Number of results to return (1–20, default 10) |
+| `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
+| `-h, --help` | Show help and exit |
+| `-v, --version` | Show the version and exit |
+| `--` | Treat everything after it as the query (for queries starting with `-`) |
+
+```bash
+@google -n 5 nodejs streams        # limit to 5 results
+@google --json "rust async"        # machine-readable JSON output
+@google --help                     # usage
+```
+
+> In `--json` mode, results are printed to **stdout** as a JSON array while the
+> progress banner is sent to **stderr**, so `@google --json "q" | jq` stays clean.
 
 ### Examples
 
@@ -328,11 +347,13 @@ You can also use @spjoshis/gogl as a library in your Node.js projects:
 ```javascript
 import { search, formatResults } from '@spjoshis/gogl';
 
-// Perform search
+// Perform search (options are optional and backward compatible)
 const results = await search('nodejs');
+const fewer = await search('nodejs', { results: 5 }); // limit result count
 
 // Format results
 const formatted = formatResults(results);
+const asJson = formatResults(results, { json: true }); // JSON string
 
 // Print results
 console.log(formatted);
@@ -353,13 +374,13 @@ Currently no environment variables are supported. Configuration can be added in 
 
 ### CLI Options
 
-Currently only the query parameter is supported. Additional options may be added:
+See [Options](#options) above for the supported flags (`--results`, `--json`,
+`--help`, `--version`). Additional options may be added:
 
 ```bash
 # Planned features:
-# @google --results 20 "query"      # Get more results
-# @google --json "query"             # JSON output
 # @google --filter "*.pdf" "query"   # Filter by file type
+# @google --engine duckduckgo "query" # Alternate search engine
 ```
 
 ## 🤝 Contributing
@@ -483,9 +504,9 @@ When I search for "nodejs", the command times out.
 
 Planned features and improvements:
 
-- [ ] JSON output format option
+- [x] JSON output format option
 - [ ] Filter results by date
-- [ ] Custom number of results
+- [x] Custom number of results
 - [ ] Result caching
 - [ ] Multiple search engine support
 - [ ] Rich terminal formatting (colors, tables)

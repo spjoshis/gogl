@@ -13,6 +13,18 @@ describe('search', () => {
     expect(results.length).toBe(0);
   });
 
+  test('should accept a legacy numeric second argument (maxRetries)', async () => {
+    const results = await search('', 1);
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBe(0);
+  });
+
+  test('should accept an options object as the second argument', async () => {
+    const results = await search('', { maxRetries: 1, results: 5 });
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBe(0);
+  });
+
   // Integration test - only runs if LIVE_TESTS env var is set
   (process.env.LIVE_TESTS ? test : test.skip)(
     'should return array of results from live Google search',

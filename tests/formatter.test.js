@@ -54,4 +54,35 @@ describe('formatResults', () => {
     const output = formatResults(results);
     expect(output).toContain('Test & Title');
   });
+
+  describe('JSON output', () => {
+    test('should return parseable JSON array of results', () => {
+      const results = [
+        { title: 'First', url: 'https://first.com', description: 'First result' },
+        { title: 'Second', url: 'https://second.com', description: 'Second result' }
+      ];
+
+      const output = formatResults(results, { json: true });
+      const parsed = JSON.parse(output);
+      expect(Array.isArray(parsed)).toBe(true);
+      expect(parsed).toHaveLength(2);
+      expect(parsed[0]).toEqual({
+        title: 'First',
+        url: 'https://first.com',
+        description: 'First result'
+      });
+    });
+
+    test('should return an empty JSON array for no results', () => {
+      expect(JSON.parse(formatResults([], { json: true }))).toEqual([]);
+    });
+
+    test('should return an empty JSON array for undefined results', () => {
+      expect(JSON.parse(formatResults(undefined, { json: true }))).toEqual([]);
+    });
+
+    test('should not print the "No results found" text in JSON mode', () => {
+      expect(formatResults([], { json: true })).not.toContain('No results found');
+    });
+  });
 });

@@ -1,6 +1,8 @@
 import { chromium } from 'playwright';
 
-async function searchOnce(query) {
+import { DEFAULT_RESULTS } from './parser.js';
+
+async function searchOnce(query, count = DEFAULT_RESULTS) {
   if (!query || query.trim() === '') {
     return [];
   }
@@ -10,15 +12,15 @@ async function searchOnce(query) {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    // Navigate to Google search
+    // Navigate to Google search. `num` is a best-effort hint for result count.
     const encodedQuery = encodeURIComponent(query);
-    await page.goto(`https://www.google.com/search?q=${encodedQuery}`, {
+    await page.goto(`https://www.google.com/search?q=${encodedQuery}&num=${count}`, {
       waitUntil: 'networkidle',
       timeout: 30000
     });
 
     // Extract results using CSS selectors
-    const results = await page.evaluate(() => {
+    const results = await page.evaluate((max) => {
       const resultElements = document.querySelectorAll('div.g');
       const items = [];
 
@@ -47,8 +49,8 @@ async function searchOnce(query) {
         }
       });
 
-      return items.slice(0, 10); // Top 10 results
-    });
+      return items.slice(0, max);
+    }, count);
 
     return results;
   } catch (error) {
@@ -60,10 +62,22 @@ async function searchOnce(query) {
   }
 }
 
-export async function search(query, maxRetries = 2) {
+/**
+ * Search Google for a query.
+ *
+ * @param {string} query
+ * @param {object|number} [options] - options object, or a number for the legacy
+ *   `maxRetries` positional argument (backward compatible).
+ * @param {number} [options.maxRetries=2]
+ * @param {number} [options.results=10]
+ */
+export async function search(query, options = {}) {
+  const opts = typeof options === 'number' ? { maxRetries: options } : (options || {});
+  const { maxRetries = 2, results = DEFAULT_RESULTS } = opts;
+
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await searchOnce(query);
+      return await searchOnce(query, results);
     } catch (error) {
       if (attempt === maxRetries) {
         throw error;
