@@ -27,10 +27,11 @@ describe('parseArgs', () => {
   });
 
   describe('defaults', () => {
-    test('should default to non-json, 10 results, no help/version', () => {
+    test('should default to non-json, 10 results, google engine, no help/version', () => {
       const result = parseArgs(['nodejs']);
       expect(result.json).toBe(false);
       expect(result.results).toBe(10);
+      expect(result.engine).toBe('google');
       expect(result.help).toBe(false);
       expect(result.version).toBe(false);
     });
@@ -102,6 +103,31 @@ describe('parseArgs', () => {
 
     test('should throw when --results has no value', () => {
       expect(() => parseArgs(['nodejs', '--results'])).toThrow();
+    });
+  });
+
+  describe('--engine', () => {
+    test('should parse --engine duckduckgo', () => {
+      const result = parseArgs(['--engine', 'duckduckgo', 'nodejs']);
+      expect(result.engine).toBe('duckduckgo');
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('should parse --engine=duckduckgo form', () => {
+      const result = parseArgs(['--engine=duckduckgo', 'nodejs']);
+      expect(result.engine).toBe('duckduckgo');
+    });
+
+    test('should throw for an unsupported engine', () => {
+      expect(() => parseArgs(['--engine', 'bing', 'nodejs'])).toThrow(/Unknown engine: bing/);
+    });
+
+    test('should throw when --engine has no value', () => {
+      expect(() => parseArgs(['nodejs', '--engine'])).toThrow(/--engine requires a value/);
+    });
+
+    test('should let --help win over an unsupported engine (no throw)', () => {
+      expect(parseArgs(['--help', '--engine', 'bing']).help).toBe(true);
     });
   });
 

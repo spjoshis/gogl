@@ -1,3 +1,5 @@
+import { DEFAULT_ENGINE, resolveEngine } from './engines/index.js';
+
 export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
 
@@ -6,9 +8,10 @@ export const MAX_RESULTS = 20;
  *
  * @param {string[]} argv - argument vector (already sliced past node/script)
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
- *   help: boolean, version: boolean }}
- * @throws {Error} on unknown flags or an invalid --results value (unless
- *   --help/--version is present, which always wins)
+ *   engine: string, help: boolean, version: boolean }}
+ * @throws {Error} on unknown flags, an invalid --results value, or an
+ *   unsupported --engine value (unless --help/--version is present, which
+ *   always wins)
  */
 export function parseArgs(argv) {
   const options = {
@@ -16,6 +19,7 @@ export function parseArgs(argv) {
     json: false,
     results: DEFAULT_RESULTS,
     clamped: false,
+    engine: DEFAULT_ENGINE,
     help: false,
     version: false
   };
@@ -27,6 +31,8 @@ export function parseArgs(argv) {
   const queryParts = [];
   let sawResults = false;
   let rawResults = null;
+  let sawEngine = false;
+  let rawEngine = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -67,6 +73,22 @@ export function parseArgs(argv) {
       sawResults = true;
       continue;
     }
+    if (token === '--engine') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--engine requires a value');
+        continue;
+      }
+      rawEngine = value;
+      sawEngine = true;
+      i++; // consume the value token
+      continue;
+    }
+    if (token.startsWith('--engine=')) {
+      rawEngine = token.slice('--engine='.length);
+      sawEngine = true;
+      continue;
+    }
 
     // Any other flag-looking token is unknown. A lone '-' is treated as query.
     if (token.length > 1 && token.startsWith('-')) {
@@ -87,6 +109,15 @@ export function parseArgs(argv) {
       const { value, clamped } = normalizeResults(rawResults);
       options.results = value;
       options.clamped = clamped;
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawEngine) {
+    try {
+      resolveEngine(rawEngine);
+      options.engine = rawEngine;
     } catch (error) {
       deferredError = deferredError || error;
     }

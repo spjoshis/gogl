@@ -89,3 +89,32 @@ resilience)** remains relevant but is secondary to escaping the block. Suggested
 Cycle 2 selection: **#6 alternate engine**, with `--engine` flag riding on the
 argument layer this cycle introduced.
 
+## Cycle 2 outcome & learnings (2026-09-21)
+
+**Shipped:** _Alternate Search Engine (DuckDuckGo)_ (#6) — `src/engines/`
+abstraction (`google.js`, `duckduckgo.js`, registry), `--engine <name>` /
+`--engine=<name>` CLI flag, `search(query, { engine })` library option.
+Google stays the default (backward compatible). 73 unit tests passing (up
+from 52), 100% statement coverage on `parser.js` and `src/engines/*`.
+Version bumped to 1.2.0. Branch `feat/multi-engine-search`, pending push/PR.
+
+**Key discovery (same class as Cycle 1's):** live validation attempted from
+three independent network paths in this session — a local Playwright launch,
+the gateway's `web_fetch` tool, and the gateway's own DuckDuckGo-backed
+`web_search` tool — and **all three hit a DuckDuckGo bot-detection
+challenge**, not just Google. This means item #6 does not currently *prove*
+it restores live results in this environment; it's shipped on the strength
+of well-documented public markup (same confidence level Cycle 1 had for
+Google) plus graceful degradation (empty results, not a crash) if the
+challenge is hit. The underlying reliability risk (#4, selector/anti-bot
+resilience) is now confirmed to affect **both** engines, not just Google.
+
+**Re-prioritization for Cycle 3:** promote **#4 (extraction/anti-bot
+resilience)** — specifically, add an opt-in live DuckDuckGo assertion once
+verifiable from an unblocked network, and reconsider whether engine
+auto-failover (rejected this cycle as premature, see PRODUCT-SPEC §10)
+becomes justified if manual `--engine` switching turns out to be a common
+real-world workaround users need. Items #7 (colored output) and #9 (config
+file) remain viable lower-risk fast-follows if reliability work stalls on
+environment access.
+

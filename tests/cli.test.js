@@ -27,6 +27,7 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(0);
     expect(stdout).toContain('Usage: @google');
     expect(stdout).toContain('--json');
+    expect(stdout).toContain('--engine');
   });
 
   test('--version prints the package version and exits 0', () => {
@@ -45,6 +46,12 @@ describe('CLI (non-network paths)', () => {
     const { status, stderr } = runCli(['--results', 'abc', 'foo']);
     expect(status).toBe(1);
     expect(stderr).toMatch(/positive integer/i);
+  });
+
+  test('invalid --engine exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--engine', 'bing', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/unknown engine/i);
   });
 
   test('no query exits 1 with usage on stderr', () => {
