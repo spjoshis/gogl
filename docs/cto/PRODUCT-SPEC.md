@@ -1,136 +1,130 @@
-# PRODUCT-SPEC.md — CLI Output & Options
+# PRODUCT-SPEC.md — Alternate Search Engine (DuckDuckGo)
 
 _Unified product specification (Gate 2). Synthesized from three product-owner
-lenses: (A) scripting/automation user, (B) interactive terminal user,
-(C) library consumer. Generated 2026-09-20._
+lenses: (A) reliability-first user hitting Google blocks, (B) interactive
+default user, (C) library consumer. Generated 2026-09-21._
 
 ## 1. Objective
 
-Give `gogl` a real command-line interface: machine-readable output and a
-configurable result count, plus the standard `--help`/`--version` affordances —
-without breaking the existing zero-flag behavior or the library API.
+Give `gogl` a pluggable search-engine backend so a search can be served by
+Google (default, unchanged) or DuckDuckGo, without breaking existing
+zero-flag behavior or the library API.
 
 ## 2. User problem
 
-- **Automation users** can't consume results programmatically; text output must
-  be regex-scraped. (README even documents an "API Usage" and "Piping" section,
-  signaling this audience.)
-- **All users** hit a footgun: any `--flag` is silently folded into the search
-  query. `@google --help` searches Google for "--help".
-- **Power users** can't ask for more or fewer than 10 results.
-- There is no `--version` (needed for bug reports; README asks reporters to
-  include it) and no `--help`.
+- Cycle 1's live validation found Google serving a CAPTCHA/"unusual traffic"
+  challenge to the headless scraper — the tool's **core function can return
+  zero results** with no user-facing workaround.
+- Users have no way to route around a blocked or degraded engine.
+- The README's roadmap already promised "Multiple search engine support."
 
 ## 3. Target users & journeys
 
-- **A. Scripting user:** `gogl --json "rust async" | jq '.[0].url'` → clean JSON
-  on stdout, progress/noise on stderr, non-zero exit on failure.
-- **B. Interactive user:** `gogl -n 5 nodejs` → 5 human-readable results;
-  `gogl --help` → usage; `gogl --version` → version string.
-- **C. Library consumer:** `import { search, formatResults }` continues to work;
-  `formatResults(results, { json: true })` returns a JSON string.
+- **A. Reliability-first user:** `gogl --engine duckduckgo nodejs` when
+  Google is blocking them → results from DuckDuckGo instead, same output
+  shape.
+- **B. Default user:** `gogl nodejs` → unchanged, still Google, same output
+  as before this change.
+- **C. Library consumer:** `search('nodejs', { engine: 'duckduckgo' })`
+  returns the same `{title,url,description}[]` shape regardless of engine.
 
 ## 4. Functional requirements
 
-1. **`--json`** — emit results as a JSON array of `{title,url,description}` on
-   **stdout**. No results → `[]`. The human "Searching Google for…" banner must
-   NOT pollute stdout in JSON mode (route it to stderr).
-2. **`-n, --results <N>`** — integer result count. Default `10`. Supports
-   `--results 5`, `-n 5`, and `--results=5`.
-3. **`-h, --help`** — print usage/options to stdout, exit `0`. Short-circuits
-   (works with no query).
-4. **`-v, --version`** — print the package version to stdout, exit `0`.
-   Short-circuits.
-5. **Unknown flags** (`--foo`) → error to stderr with a usage hint, exit `1`.
-6. **`--` separator** — everything after `--` is treated as query text, enabling
-   queries that begin with `-`.
-7. **Backward compatibility** — with no flags, behavior is byte-for-byte the
-   current behavior (text output, top 10, banner on stdout). The library
-   `search(query)` / `formatResults(results)` signatures keep working.
+1. **`--engine <name>`** — select the search engine. Supported values:
+   `google` (default), `duckduckgo`. Supports `--engine duckduckgo` and
+   `--engine=duckduckgo` forms, matching the existing `--results` pattern.
+2. **Unknown engine** (`--engine bing`) → error to stderr naming the
+   supported engines, exit `1`. Deferred like other validation errors so
+   `--help`/`--version` still win.
+3. **Output parity** — result objects have the same shape
+   (`{title, url, description}`) regardless of engine; `--json`, `--results`,
+   text formatting all work unchanged with either engine.
+4. **Library API** — `search(query, { engine })` accepts the new option;
+   omitting it preserves the current default (`google`).
+5. **Backward compatibility** — with no `--engine` flag, behavior is
+   byte-for-byte the current Google-only behavior.
 
 ## 5. Business rules & validation
 
-- `--results` value must be a positive integer (`>= 1`). Non-integer, zero, or
-  negative → error to stderr, exit `1`.
-- `--results` is capped at **20** (`MAX_RESULTS`). Values above 20 are clamped
-  to 20 with a one-line stderr notice. Rationale: Google's first results page
-  realistically yields ~10 organic results; a best-effort `num` hint is sent but
-  more than one page is out of scope.
-- Flags may appear before, after, or interleaved with query words.
-- If `--json` and a human flag like `--help` are combined, the short-circuit
-  flag (`--help`/`--version`) wins.
+- `DEFAULT_ENGINE` stays `google` — the package is branded and installed as
+  `@google`; changing the default would be a surprising behavior change for
+  existing users and is not justified by this cycle's evidence (the Google
+  block observed in Cycle 1 was inside this specific sandboxed environment,
+  not confirmed as universal).
+- Engine name validation is a fixed allowlist (`google`, `duckduckgo`), not
+  free-form input passed into a URL — no injection surface.
 
 ## 6. Non-functional requirements
 
-- **No new runtime dependencies** — hand-rolled parsing (the surface is tiny;
-  adding `yargs`/`commander` would violate the "zero deps" selling point).
-- **Performance:** parsing is O(argv); no measurable overhead. `--help` /
-  `--version` must NOT launch a browser.
-- **Security/privacy:** no new data stored; query still only sent to Google.
-  Version is read from the local `package.json`, not the network.
-- **Observability:** errors and notices go to stderr; results to stdout. Exit
-  codes are meaningful (`0` success/help, `1` usage/runtime error).
+- **No new runtime dependencies** — reuses the existing Playwright
+  dependency; engines differ only in URL and DOM-extraction logic.
+- **Performance:** engine dispatch is a single object-property lookup; no
+  measurable overhead versus Cycle 1.
+- **Security/privacy:** no new data stored; the query is sent only to the
+  selected engine. DuckDuckGo's redirect-wrapped result links
+  (`/l/?uddg=...`) are unwrapped client-side before being returned, so
+  callers get the real destination URL, not a DuckDuckGo redirect.
+- **Observability:** the "Searching <Engine> for…" banner and error messages
+  name the active engine so failures are attributable.
 
 ## 7. Acceptance criteria (Given → When → Then)
 
-1. **JSON output**
-   - Given a query, When I pass `--json`, Then stdout is valid JSON parseable
-     into an array of `{title,url,description}` objects and contains no banner.
-2. **JSON empty**
-   - Given a query with no results, When I pass `--json`, Then stdout is exactly
-     `[]` (parseable, length 0).
-3. **Result count**
-   - Given `--results 3`, When results are formatted, Then at most 3 are
-     returned/printed.
-   - Given `-n 3` or `--results=3`, Then behavior is identical to `--results 3`.
-4. **Count validation**
-   - Given `--results abc` (or `0`, or `-2`), When parsed, Then a usage error is
-     raised (exit 1), and no browser launches.
-   - Given `--results 999`, Then the effective count is clamped to 20.
-5. **Help/version**
-   - Given `--help` (or `-h`), Then usage prints to stdout and exit is `0`, even
-     with no query, and no browser launches.
-   - Given `--version` (or `-v`), Then the version from package.json prints and
-     exit is `0`.
-6. **Unknown flag**
-   - Given `--bogus`, Then an error prints to stderr and exit is `1`.
-7. **Separator**
-   - Given `-- --json`, Then the query is the literal string `--json` (flag not
-     interpreted).
-8. **Backward compatibility**
-   - Given only query words (no flags), Then output equals the pre-change text
-     output (top 10, banner on stdout).
-   - Given `search(query)` / `formatResults(results)` calls, Then existing
-     return shapes are unchanged.
+1. **Default unchanged**
+   - Given no `--engine` flag, When a search runs, Then it uses Google and
+     produces output identical to pre-change behavior.
+2. **Engine selection**
+   - Given `--engine duckduckgo`, When a search runs, Then it navigates to
+     the DuckDuckGo HTML endpoint and returns results in the same shape.
+3. **Unknown engine**
+   - Given `--engine bing`, Then a stderr error names the unknown engine and
+     the supported list, and exit code is `1`, with no browser launched.
+4. **Help precedence**
+   - Given `--help --engine bing`, Then help wins (exit `0`), matching the
+     existing `--results`/unknown-flag precedence rule.
+5. **Library parity**
+   - Given `search(query, { engine: 'duckduckgo' })`, Then the resolved
+     engine is used and an unknown engine name rejects the returned promise
+     before any browser is launched.
+6. **Redirect unwrapping**
+   - Given a DuckDuckGo result whose link is a `/l/?uddg=` redirect, Then
+     the returned `url` is the decoded real destination, not the redirect.
 
 ## 8. Edge cases & error states
 
-- Empty argv → existing usage error (exit 1). Unchanged.
-- `--results` as the last token with no value → usage error.
-- Query is only flags after parsing (e.g. `@google --json`) with no query → the
-  existing "query required" usage error (exit 1) — unless `--help`/`--version`.
-- Whitespace normalization of the query is preserved (`\s+` → single space,
-  trimmed).
+- `--engine` as the last token with no value → usage error (mirrors
+  `--results`).
+- Engine-specific extraction returning zero results (e.g. an anti-bot
+  challenge page) → empty array, same graceful handling as the existing
+  Google path (`[]` in JSON, "No results found." in text, exit `0`).
+- A DuckDuckGo result with a malformed/unparseable href → the raw href is
+  kept rather than the extractor throwing.
 
 ## 9. Scope
 
-- **In scope:** arg parsing layer, `--json`, `--results/-n`, `--help/-h`,
-  `--version/-v`, `--` separator, unknown-flag handling, README update, tests.
-- **Out of scope (future):** `--no-color`/colored output, alternate engines,
-  caching, config files, multi-page pagination, date/filetype filters.
-- **Assumptions:** single-page Google scrape; `num` URL hint is best-effort.
+- **In scope:** engine abstraction (`src/engines/`), `--engine` flag,
+  DuckDuckGo backend, tests, README updates.
+- **Out of scope (future):** additional engines beyond Google/DuckDuckGo,
+  automatic engine fallback/failover on block detection, per-engine result
+  count tuning, `--filter`, caching, colored output, config files.
+- **Assumptions:** DuckDuckGo's `html.duckduckgo.com` markup
+  (`.result__body`, `.result__title a.result__a`, `.result__snippet`, the
+  `/l/?uddg=` redirect scheme) matches the widely-documented structure used
+  by other open-source scrapers; this could not be live-verified in this
+  session (see TECHNICAL-DESIGN §5 / CODE-REVIEW known limitations).
 - **Dependencies:** none new.
 
 ## 10. Cross-lens reconciliation (conflicts resolved by CTO)
 
-- **stdout hygiene (A vs B):** Lens A wants pure JSON on stdout; Lens B wants the
-  reassuring banner. **Resolution:** banner stays on stdout in text mode
-  (backward compat) but moves to **stderr in JSON mode**. Best of both.
-- **Result cap (A vs C):** Lens A wanted uncapped `--results`; library lens C
-  wanted predictable bounds. **Resolution:** cap at 20 with a stderr notice;
-  honest about the single-page limitation.
-- **Parser vs library (C):** changing `search(query, maxRetries)`’s second
-  positional arg risked breaking library callers. **Resolution:** accept an
-  options object *and* a legacy numeric second arg (see TECHNICAL-DESIGN).
-- **Dependency (all):** a PO suggested `commander`. **Rejected** — conflicts
-  with the package's "zero dependencies" identity for a tiny flag surface.
+- **Default engine (A vs B):** Lens A (reliability-first) wanted DuckDuckGo
+  as the default since Google was observed blocked. **Resolution:** keep
+  `google` as default — the block was observed in one sandboxed environment,
+  not confirmed universal, and the package's own branding/command name
+  (`@google`) makes a silent default change a bigger behavioral surprise
+  than the problem it would solve. Users who hit blocks can opt in via
+  `--engine`.
+- **Automatic failover (A):** Lens A also proposed auto-retrying with a
+  second engine on failure. **Rejected for this cycle** — adds meaningful
+  complexity (partial-failure semantics, doubled request volume, unclear
+  which engine's error to surface) for a benefit not yet proven necessary;
+  revisit if manual `--engine` switching turns out to be a common workaround
+  users actually need.

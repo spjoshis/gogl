@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { search } from '../src/index.js';
 import { parseArgs, MAX_RESULTS } from '../src/parser.js';
 import { formatResults } from '../src/formatter.js';
+import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -14,6 +15,7 @@ Ask anything to Google from your terminal.
 Options:
   -n, --results <count>   Number of results to return (1-20, default 10)
       --json              Output results as JSON (to stdout)
+      --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -21,6 +23,7 @@ Options:
 Examples:
   @google what is javascript
   @google -n 5 nodejs streams
+  @google --engine duckduckgo nodejs streams
   @google --json "rust async" | jq '.[0].url'`;
 
 function getVersion() {
@@ -62,15 +65,17 @@ async function main() {
   }
 
   try {
+    const engineLabel = resolveEngine(options.engine).label;
+
     // Keep stdout clean for JSON so it can be piped; progress goes to stderr.
-    const banner = `\nSearching Google for: "${options.query}"\n`;
+    const banner = `\nSearching ${engineLabel} for: "${options.query}"\n`;
     if (options.json) {
       console.error(banner);
     } else {
       console.log(banner);
     }
 
-    const results = await search(options.query, { results: options.results });
+    const results = await search(options.query, { results: options.results, engine: options.engine });
     const formatted = formatResults(results, { json: options.json });
 
     console.log(formatted);

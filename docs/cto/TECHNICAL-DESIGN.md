@@ -1,147 +1,202 @@
-# TECHNICAL-DESIGN.md — CLI Output & Options
+# TECHNICAL-DESIGN.md — Alternate Search Engine (DuckDuckGo)
 
-_Engineering design (Gate 3). Generated 2026-09-20._
+_Engineering design (Gate 3). Generated 2026-09-21._
 
 ## 1. Components affected
 
 | File | Change | Reason |
 |------|--------|--------|
-| `src/parser.js` | Rewrite: argv → `{ query, json, results, help, version }` | New CLI contract; core of the feature |
-| `src/search.js` | `search(query, options)` accepts `results`; `searchOnce(query, count)`; `num` URL hint | Configurable count, backward compatible |
-| `src/formatter.js` | `formatResults(results, options)` with `{ json }` path | Machine-readable output |
-| `bin/gogl.js` | Wire flags; help/version short-circuit; stderr routing | I/O orchestration |
-| `package.json` | none (no new deps) | Zero-dep principle |
-| `tests/*` | Extend parser/formatter/search tests | Behavior coverage |
-| `README.md` | Document flags; update roadmap checkboxes | Docs-as-delivery |
+| `src/engines/index.js` | **New.** Engine registry + `resolveEngine(name)` | Single source of truth for supported engine names |
+| `src/engines/google.js` | **New.** Extracted from old `search.js` inline logic | Isolates Google-specific URL/DOM logic |
+| `src/engines/duckduckgo.js` | **New.** DuckDuckGo backend | Isolates DuckDuckGo-specific URL/DOM logic |
+| `src/search.js` | `searchOnce` takes an `engine` object; `search()` accepts `options.engine` | Generic browser/retry orchestration, engine-agnostic |
+| `src/parser.js` | Adds `--engine`/`--engine=` parsing + validation against `ENGINE_NAMES` | New CLI surface |
+| `bin/gogl.js` | Wires `options.engine` into `search()`; help text lists engines; banner names the active engine | I/O orchestration |
+| `package.json` | Version bump only (no new deps) | Zero-dep principle preserved |
+| `tests/engines.test.js` | **New.** Per-engine `buildUrl`/`extract` tests | Behavior coverage without a browser |
+| `tests/parser.test.js`, `tests/cli.test.js`, `tests/search.test.js` | Extended | `--engine` coverage |
+| `README.md` | Documents `--engine`, engine table, roadmap checkbox | Docs-as-delivery |
 
-No new components/modules. Existing module boundaries are preserved
-(parse → search → format → print).
+Module boundaries: `parser → search → engines/{name} → formatter`. The
+`engines/` directory is a new sub-boundary, but the top-level pipeline shape
+(parse → search → format → print) is unchanged.
 
 ## 2. Technical design
 
-### 2.1 `parser.js` — argument layer
-
-Signature unchanged: `parseArgs(argv) -> object`. New return shape:
+### 2.1 `src/engines/index.js` — registry
 
 ```js
-{ query: string, json: boolean, results: number, help: boolean, version: boolean }
+export const DEFAULT_ENGINE = 'google';
+export const ENGINES = { google, duckduckgo };
+export const ENGINE_NAMES = Object.keys(ENGINES);
+export function resolveEngine(name) {
+  const engine = ENGINES[name];
+  if (!engine) throw new Error(`Unknown engine: ${name}. Supported: ${ENGINE_NAMES.join(', ')}`);
+  return engine;
+}
 ```
 
-Algorithm (single left-to-right pass):
+No dynamic import/plugin loading — a small static map is proportional to two
+engines and keeps the surface simple (YAGNI; a plugin system would be
+over-engineering for this scale).
 
-1. If no argv → `{ query: '', json: false, results: DEFAULT_RESULTS,
-   help: false, version: false }`.
-2. Walk tokens:
-   - `--` → push all remaining tokens to `queryParts`, stop flag parsing.
-   - `-h`/`--help` → `help = true`.
-   - `-v`/`--version` → `version = true`.
-   - `--json` → `json = true`.
-   - `-n`/`--results` → consume next token as value; `--results=N` handled by
-     splitting on first `=`.
-   - other `-`/`--`-prefixed token → **unknown flag**: throw
-     `Error('Unknown option: <flag>')`.
-   - anything else → `queryParts.push(token)`.
-3. Validate `--results` value: must match `/^\d+$/` and be `>= 1`; else throw
-   `Error('--results must be a positive integer')`. Clamp to `MAX_RESULTS`
-   (20); when clamped, set a `results` = 20 (bin emits the stderr notice, or
-   parser returns the clamped value and bin notices — see 2.4).
-4. `query = queryParts.join(' ').trim().replace(/\s+/g, ' ')` (preserves current
-   normalization).
+### 2.2 Engine module contract
 
-Constants: `DEFAULT_RESULTS = 10`, `MAX_RESULTS = 20`.
+Each engine module exports:
 
-**Error strategy:** parser throws `Error` for invalid/unknown flags; `bin`
-catches and renders usage + exit 1. Throwing (vs returning an error field) keeps
-the happy-path shape clean and matches "fail fast, handle at the edge."
+- `label: string` — human-readable name for banners/errors (e.g. `"Google"`).
+- `buildUrl(query, count): string` — the URL to navigate to.
+- `extract(count, doc = document): Array<{title,url,description}>` — DOM
+  extraction. Runs inside the page via `page.evaluate(engine.extract, count)`,
+  so it must not close over anything outside its own module (only `document`,
+  `URL`, and other page globals). The `doc = document` default parameter is
+  what Playwright's browser context resolves at call time in production, and
+  is also what lets tests inject a fake `doc` without a browser or jsdom.
 
-### 2.2 `search.js` — configurable count, backward compatible
+`google.js` extraction logic is moved verbatim from the old inline
+`page.evaluate` callback in `search.js` — no behavior change for the default
+path.
+
+`duckduckgo.js` targets `https://html.duckduckgo.com/html/?q=<query>` (the
+no-JS "lite" HTML endpoint, appropriate for a headless scrape) and extracts
+via `.result__body` → `.result__title a.result__a` (title + href) and
+`.result__snippet` (description). DuckDuckGo wraps external result links in
+a redirect (`https://duckduckgo.com/l/?uddg=<encoded-url>&rut=...`); `extract`
+unwraps this via `new URL(href, 'https://duckduckgo.com')` and decodes the
+`uddg` query param, falling back to the raw href if parsing fails.
+
+### 2.3 `src/search.js` — generic orchestration
 
 ```js
+async function searchOnce(query, count, engine) {
+  // unchanged retry/browser lifecycle; navigates to engine.buildUrl(...)
+  // and calls page.evaluate(engine.extract, count)
+}
+
 export async function search(query, options = {}) {
-  const opts = typeof options === 'number' ? { maxRetries: options } : options;
-  const { maxRetries = 2, results = 10 } = opts;
-  // retry loop → searchOnce(query, results)
+  const opts = typeof options === 'number' ? { maxRetries: options } : (options || {});
+  const { maxRetries = 2, results = DEFAULT_RESULTS, engine: engineName = DEFAULT_ENGINE } = opts;
+  const engine = resolveEngine(engineName); // throws synchronously -> rejected promise
+  // existing retry loop, unchanged
 }
 ```
 
-- Preserves the legacy `search(query, 2)` numeric call AND the documented
-  `search(query)` call. New callers use `search(query, { results })`.
-- `searchOnce(query, count = 10)`: add `&num=${count}` to the Google URL as a
-  best-effort hint; `page.evaluate` takes `count` and returns
-  `items.slice(0, count)`.
-- Passing a value into `page.evaluate` uses the arg form:
-  `page.evaluate((n) => {…}, count)`.
+`resolveEngine` is called once per `search()` invocation, before the retry
+loop, so an unknown engine name fails fast without launching a browser (same
+principle as `--results` validation failing before any network call).
 
-### 2.3 `formatter.js` — JSON path
+### 2.4 `src/parser.js` — `--engine` flag
 
-```js
-export function formatResults(results, options = {}) {
-  if (options.json) return JSON.stringify(results ?? [], null, 2);
-  // existing text path unchanged
-}
-```
+Mirrors the existing `-n`/`--results` pattern exactly:
 
-- Empty/undefined in JSON mode → `"[]"`.
-- Text path byte-for-byte unchanged (backward compat).
+- `--engine <value>` consumes the next token; `--engine=<value>` splits on
+  `=`.
+- Missing value → deferred error `--engine requires a value`.
+- Value not in `ENGINE_NAMES` → deferred error `Unknown engine: <name>.
+  Supported: <list>`.
+- Deferred so `--help`/`--version` still short-circuit and win, consistent
+  with every other validated flag.
 
-### 2.4 `bin/gogl.js` — orchestration
+`parser.js` imports `DEFAULT_ENGINE`/`ENGINE_NAMES` from `engines/index.js`;
+`engines/index.js` has no dependency on `parser.js` or `search.js`, so no
+import cycle is introduced.
 
-1. `parseArgs` inside try/catch. On thrown parse error → print message + short
-   usage to stderr, exit 1.
-2. If `help` → print help text to **stdout**, exit 0 (before any browser).
-3. If `version` → read version from `package.json`, print to stdout, exit 0.
-4. If no `query` → existing usage error to stderr, exit 1.
-5. Banner: text mode → stdout (unchanged); JSON mode → stderr.
-6. `search(query, { results })` → `formatResults(results, { json })` →
-   `console.log` (stdout).
-7. Existing error mapping (timeout/network/other) preserved; exit 1.
+### 2.5 `bin/gogl.js` — orchestration
 
-**Version read (ESM, Node ≥18 safe):** resolve `package.json` via
-`fileURLToPath(new URL('../package.json', import.meta.url))` +
-`readFileSync` + `JSON.parse`. Avoids JSON import-assertion syntax differences
-between Node 18/20.
+- Help text's engine line is generated from `ENGINE_NAMES` (not hand-typed),
+  so it can't drift from the registry.
+- The progress banner now reads `Searching ${engine.label} for: "<query>"`
+  instead of a hardcoded "Searching Google for…", resolved via
+  `resolveEngine(options.engine).label`.
+- `search(options.query, { results: options.results, engine: options.engine })`
+  — the only change to the call site.
 
 ## 3. Security
 
-- No new inputs cross a trust boundary beyond the existing query→Google flow.
-- `--results` is strictly validated (`/^\d+$/`) before use; it is only
-  interpolated into a numeric `num=` and an array slice — no injection surface.
-- Version read is local FS only; no secrets, no network.
-- No new data persisted; privacy guarantee intact.
+- `--engine` value is validated against a fixed allowlist before use
+  anywhere; it is never interpolated into a URL or otherwise passed through
+  raw. No injection surface (same posture as the `--results` integer check).
+- DuckDuckGo's `uddg` redirect param is decoded with `decodeURIComponent`
+  and returned as plain data (a string in the result object) — never
+  evaluated, navigated to automatically, or used to construct another
+  request. Callers (CLI or library) treat it exactly like a Google result
+  URL: display/format only.
+- No new persisted data; the privacy guarantee ("does NOT store your search
+  queries") is unaffected — engine selection is transient per-invocation,
+  not persisted.
 
 ## 4. Performance
 
-- Parsing is O(n) over argv (tiny). Help/version short-circuit **before**
-  launching Chromium (saves ~3–5s + ~150MB when the user just wants help).
-- `num` hint may return more results on one page; still one navigation, one
-  browser — no added round-trips.
+- `resolveEngine` is an O(1) object lookup.
+- No additional network round-trips versus Cycle 1: still one navigation,
+  one browser instance, one `page.evaluate` per attempt, regardless of
+  engine.
+- DuckDuckGo's HTML-only endpoint is lighter to render than Google's results
+  page (no client-side JS-driven layout), so `waitUntil: 'networkidle'` may
+  resolve faster in practice, though this wasn't benchmarked.
 
 ## 5. Reliability & failure behavior
 
-- Retry loop unchanged (exponential-ish backoff, 2 attempts).
-- Invalid flags fail fast with exit 1 and never launch a browser.
-- JSON mode still exits 1 on runtime error (errors on stderr), so scripts can
-  detect failure via exit code even though stdout would be empty.
+- Retry loop (`maxRetries`, unchanged) applies uniformly regardless of
+  engine; a failing engine still gets up to 2 attempts before the error
+  propagates.
+- Error messages are now engine-attributed (`Failed to search
+  ${engine.label}: ...`) instead of hardcoded to "Google", so failures are
+  diagnosable when `--engine duckduckgo` is in play.
+- **Known limitation (could not be live-validated this session):** both
+  Google and DuckDuckGo served anti-bot/CAPTCHA challenges to every network
+  path available in this session (local Playwright launch, the gateway's
+  `web_fetch`, and even the gateway's DuckDuckGo-backed `web_search` tool
+  all hit challenges). The DuckDuckGo selectors are based on the
+  widely-documented public structure of the `html.duckduckgo.com` endpoint
+  (used by numerous open-source scrapers), matching the same confidence
+  level Cycle 1 had for the Google selectors, but neither engine's
+  extraction logic was confirmed against a live, non-challenged results
+  page in this session. If DuckDuckGo has changed its markup since, `extract`
+  degrades to an empty array (same graceful behavior as a real zero-result
+  search) rather than throwing.
 
 ## 6. Testing strategy
 
 Unit (non-live, run in CI):
-- **parser:** `--json`, `-n`/`--results`/`--results=`, defaults, positive-int
-  validation (reject `abc`/`0`/`-1`), clamp >20, `--help`/`-h`,
-  `--version`/`-v`, unknown flag throws, `--` separator, flags interleaved with
-  query, backward-compat (query-only still returns `.query`).
-- **formatter:** JSON path returns parseable array; empty → `[]`; text path
-  unchanged (existing tests must still pass).
-- **search:** legacy `search('')`/whitespace still returns `[]`; numeric second
-  arg still accepted (no throw) — assert via a short-retry empty-query call.
+- **engines/index:** default engine, name list, `resolveEngine` success and
+  unknown-name throw.
+- **engines/google:** `buildUrl` shape; `extract` against fake DOM nodes
+  (title/url/description, ad-skipping, count limiting) — logic unchanged
+  from Cycle 1, re-verified after the extraction.
+- **engines/duckduckgo:** `buildUrl` shape; `extract` against fake DOM nodes
+  covering redirect-unwrapping, plain hrefs, missing snippet, missing title
+  (skip), and count limiting.
+- **parser:** `--engine`/`--engine=` forms, unknown engine throws, missing
+  value throws, `--help` wins over an invalid engine (mirrors `--results`
+  tests).
+- **cli:** invalid `--engine` exits 1 with a stderr message; `--help` output
+  mentions `--engine`.
+- **search:** unknown engine rejects before any browser launches (empty
+  query short-circuits before the engine even matters, covered by existing
+  tests); default/duckduckgo engine names accepted.
 
-Live (gated by `LIVE_TESTS=1`, not in CI): `--results 3` returns ≤3;
-`--json` shape. Kept opt-in like existing live tests.
+Fake-DOM tests use plain object mocks (`{ querySelector, querySelectorAll }`)
+rather than a jsdom dependency — consistent with the "zero new dependencies"
+principle and the existing test style.
 
-Regression: entire existing suite must remain green.
+Live (gated by `LIVE_TESTS=1`, not in CI): unchanged existing Google live
+tests; no new live DuckDuckGo test was added because this session couldn't
+get a non-challenged response to assert against (would be a flaky/unreliable
+CI assertion). Documented as a Cycle 3 candidate: add an opt-in live
+DuckDuckGo test once markup can be confirmed from a non-blocked network.
+
+Regression: entire existing suite (73 non-skipped tests) passes unchanged in
+behavior for the default (no-`--engine`) path.
 
 ## 7. Rollout / ops
 
-- Pure additive, backward-compatible change → safe to ship in a minor version
-  (1.1.0). No migrations, no feature flag needed. Rollback = revert the commit.
-- README updated in the same PR (docs-as-delivery).
+- Additive, backward-compatible → safe to ship as a minor version bump
+  (1.2.0). No migrations, no feature flag needed.
+- Merging to `main` triggers `.github/workflows/publish.yml` (path-filtered
+  on `src/**`, `bin/**`, `package.json`), which **publishes to npm
+  automatically**. This is a real, irreversible-in-effect action (npm
+  versions can be deprecated but not deleted) — flagged explicitly for the
+  merge decision, not something to wave through silently.
+- Rollback = revert the commit / publish a patch that reverts behavior; npm
+  doesn't support unpublishing a version after 72h.

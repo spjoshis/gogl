@@ -25,6 +25,20 @@ describe('search', () => {
     expect(results.length).toBe(0);
   });
 
+  test('should default to the google engine', async () => {
+    const results = await search('', { engine: 'google' });
+    expect(Array.isArray(results)).toBe(true);
+  });
+
+  test('should accept the duckduckgo engine', async () => {
+    const results = await search('', { engine: 'duckduckgo' });
+    expect(Array.isArray(results)).toBe(true);
+  });
+
+  test('should reject an unknown engine before launching a browser', async () => {
+    await expect(search('nodejs', { engine: 'bing' })).rejects.toThrow(/Unknown engine: bing/);
+  });
+
   // Integration test - only runs if LIVE_TESTS env var is set
   (process.env.LIVE_TESTS ? test : test.skip)(
     'should return array of results from live Google search',

@@ -9,7 +9,7 @@
 ## ✨ Features
 
 - 🚀 **Fast & Lightweight** - Minimal overhead, quick searches
-- 🌐 **Real Google Search** - Uses Playwright to automate actual Google searches
+- 🌐 **Real Search Results** - Uses Playwright to automate actual searches against Google or DuckDuckGo
 - 📋 **Clean Output** - Top 10 results with title, URL, and description
 - 🔄 **Retry Logic** - Automatic retry on network failures
 - 🛡️ **Error Handling** - Graceful error messages and recovery
@@ -67,6 +67,7 @@ npx @spjoshis/gogl "your query"
 |--------|-------------|
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
 | `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
+| `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -74,6 +75,7 @@ npx @spjoshis/gogl "your query"
 ```bash
 @google -n 5 nodejs streams        # limit to 5 results
 @google --json "rust async"        # machine-readable JSON output
+@google --engine duckduckgo nodejs # search DuckDuckGo instead of Google
 @google --help                     # usage
 ```
 
@@ -160,13 +162,18 @@ npx playwright install
 │   └── gogl.js              # CLI entry point
 ├── src/
 │   ├── index.js             # Main exports
-│   ├── search.js            # Playwright search logic
+│   ├── search.js            # Playwright search orchestration (retry + engine dispatch)
 │   ├── parser.js            # CLI argument parsing
-│   └── formatter.js         # Result formatting
+│   ├── formatter.js         # Result formatting
+│   └── engines/             # Per-engine URL building + DOM extraction
+│       ├── index.js         # Engine registry (google, duckduckgo)
+│       ├── google.js        # Google engine
+│       └── duckduckgo.js    # DuckDuckGo engine
 ├── tests/
 │   ├── parser.test.js       # Argument parser tests
 │   ├── search.test.js       # Search function tests
 │   ├── formatter.test.js    # Formatter tests
+│   ├── engines.test.js      # Per-engine URL/extraction tests
 │   └── edge-cases.test.js   # Edge case tests
 ├── jest.config.js           # Jest configuration
 ├── package.json             # Package metadata
@@ -211,14 +218,30 @@ LIVE_TESTS=1 npm test
 
 ### How It Works
 
-1. **Parse Arguments** - Extract the search query from command line arguments
+1. **Parse Arguments** - Extract the search query and options (including `--engine`) from command line arguments
 2. **Launch Browser** - Start Chromium in headless mode using Playwright
-3. **Navigate to Google** - Go to google.com with the search query
+3. **Navigate to Engine** - Go to the selected engine's search URL (Google or DuckDuckGo) with the query
 4. **Wait for Load** - Wait for network idle to ensure results are loaded
-5. **Extract Results** - Use DOM queries to extract result titles, URLs, and descriptions
+5. **Extract Results** - Use the engine's own DOM queries to extract result titles, URLs, and descriptions
 6. **Format Output** - Format results into readable, indexed output
 7. **Display Results** - Print formatted results to stdout
 8. **Cleanup** - Close browser and clean up resources
+
+### Search Engines
+
+`gogl` supports multiple search engines behind a common interface
+(`src/engines/`). Each engine module provides a `buildUrl(query, count)` and
+an `extract(count)` function; `search.js` handles browser lifecycle and retry
+logic independent of which engine is selected.
+
+| Engine | Flag value | Notes |
+|--------|-----------|-------|
+| Google (default) | `google` | Original behavior; unchanged with no flags. |
+| DuckDuckGo | `duckduckgo` | Uses the `html.duckduckgo.com` lite endpoint; useful when Google blocks automated requests. |
+
+```bash
+@google --json --engine duckduckgo "rust async" | jq '.[0].url'
+```
 
 ### Error Handling
 
@@ -264,6 +287,9 @@ npx playwright install
 - Check your internet connection
 - Try a simpler query
 - Try with the browser on your machine directly
+- Try `--engine duckduckgo` as an alternative; both engines apply anti-bot
+  challenges to automated traffic (especially from datacenter/cloud IPs), so
+  neither is guaranteed to bypass the other, but it's worth a shot
 
 ### "Search timed out"
 
@@ -350,6 +376,7 @@ import { search, formatResults } from '@spjoshis/gogl';
 // Perform search (options are optional and backward compatible)
 const results = await search('nodejs');
 const fewer = await search('nodejs', { results: 5 }); // limit result count
+const viaDdg = await search('nodejs', { engine: 'duckduckgo' }); // alternate engine
 
 // Format results
 const formatted = formatResults(results);
@@ -375,12 +402,11 @@ Currently no environment variables are supported. Configuration can be added in 
 ### CLI Options
 
 See [Options](#options) above for the supported flags (`--results`, `--json`,
-`--help`, `--version`). Additional options may be added:
+`--engine`, `--help`, `--version`). Additional options may be added:
 
 ```bash
 # Planned features:
 # @google --filter "*.pdf" "query"   # Filter by file type
-# @google --engine duckduckgo "query" # Alternate search engine
 ```
 
 ## 🤝 Contributing
@@ -508,7 +534,7 @@ Planned features and improvements:
 - [ ] Filter results by date
 - [x] Custom number of results
 - [ ] Result caching
-- [ ] Multiple search engine support
+- [x] Multiple search engine support (Google, DuckDuckGo)
 - [ ] Rich terminal formatting (colors, tables)
 - [ ] Result deduplication
 - [ ] Search history
@@ -519,8 +545,8 @@ Planned features and improvements:
 - **Package Size:** ~2.3 kB (minified)
 - **Dependencies:** 1 (Playwright)
 - **Test Coverage:** 80%+
-- **Latest Version:** 1.0.0
-- **Last Updated:** 2026-09-15
+- **Latest Version:** 1.2.0
+- **Last Updated:** 2026-09-21
 
 ## 🔐 Security
 
