@@ -8,6 +8,7 @@ import { parseArgs, MAX_RESULTS } from '../src/parser.js';
 import { formatResults } from '../src/formatter.js';
 import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
 import { resolveColor } from '../src/color.js';
+import { dedupeResults } from '../src/dedupe.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -19,6 +20,7 @@ Options:
       --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
       --color             Force colorized output
       --no-color          Disable colorized output
+      --no-dedupe         Keep duplicate-URL results (deduped by default)
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -81,7 +83,8 @@ async function main() {
       console.log(banner);
     }
 
-    const results = await search(options.query, { results: options.results, engine: options.engine });
+    const rawResults = await search(options.query, { results: options.results, engine: options.engine });
+    const results = options.dedupe ? dedupeResults(rawResults) : rawResults;
 
     const color = resolveColor({
       mode: options.color,

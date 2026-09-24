@@ -152,6 +152,22 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--no-dedupe', () => {
+    test('dedupe defaults on', () => {
+      expect(parseArgs(['nodejs']).dedupe).toBe(true);
+    });
+
+    test('--no-dedupe turns it off and keeps the query', () => {
+      const result = parseArgs(['--no-dedupe', 'nodejs']);
+      expect(result.dedupe).toBe(false);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('--no-dedup alias also works', () => {
+      expect(parseArgs(['--no-dedup', 'nodejs']).dedupe).toBe(false);
+    });
+  });
+
   describe('--help / --version', () => {
     test('should set help for --help and -h', () => {
       expect(parseArgs(['--help']).help).toBe(true);
