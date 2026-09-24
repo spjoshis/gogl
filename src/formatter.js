@@ -1,3 +1,5 @@
+import { SGR, paint } from './color.js';
+
 export function formatResults(results, options = {}) {
   if (options.json) {
     return JSON.stringify(results ?? [], null, 2);
@@ -7,6 +9,10 @@ export function formatResults(results, options = {}) {
     return 'No results found.';
   }
 
+  // color is opt-in and resolved by the caller; when false the output is
+  // byte-for-byte identical to the original plain format.
+  const color = options.color === true;
+
   const formatted = results
     .map((result, index) => {
       const num = index + 1;
@@ -14,12 +20,11 @@ export function formatResults(results, options = {}) {
       const url = result.url || '';
       const description = truncateText(result.description || '', 200);
 
-      return [
-        `${num}. ${title}`,
-        `   URL: ${url}`,
-        `   ${description}`,
-        ''
-      ].join('\n');
+      const titleLine = color ? paint(`${num}. ${title}`, SGR.bold) : `${num}. ${title}`;
+      const urlLine = color ? `   ${paint(`URL: ${url}`, SGR.cyan)}` : `   URL: ${url}`;
+      const descLine = color ? `   ${paint(description, SGR.dim)}` : `   ${description}`;
+
+      return [titleLine, urlLine, descLine, ''].join('\n');
     })
     .join('\n');
 

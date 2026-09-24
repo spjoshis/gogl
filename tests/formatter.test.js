@@ -1,4 +1,8 @@
 import { formatResults } from '../src/formatter.js';
+import { SGR } from '../src/color.js';
+
+// eslint-disable-next-line no-control-regex
+const ANSI = /\x1b\[/;
 
 describe('formatResults', () => {
   test('should format empty results', () => {
@@ -83,6 +87,42 @@ describe('formatResults', () => {
 
     test('should not print the "No results found" text in JSON mode', () => {
       expect(formatResults([], { json: true })).not.toContain('No results found');
+    });
+  });
+
+  describe('color output', () => {
+    const one = [{ title: 'Node.js', url: 'https://nodejs.org/', description: 'JS runtime' }];
+    const PLAIN = '1. Node.js\n   URL: https://nodejs.org/\n   JS runtime\n';
+
+    test('default (no color option) is the original plain format, byte-for-byte', () => {
+      expect(formatResults(one)).toBe(PLAIN);
+    });
+
+    test('color:false is byte-for-byte identical to the plain format', () => {
+      expect(formatResults(one, { color: false })).toBe(PLAIN);
+      expect(formatResults(one, { color: false })).not.toMatch(ANSI);
+    });
+
+    test('color:true wraps title/url/description in ANSI and always resets', () => {
+      const output = formatResults(one, { color: true });
+      expect(output).toMatch(ANSI);
+      expect(output).toContain(SGR.bold);
+      expect(output).toContain(SGR.cyan);
+      expect(output).toContain(SGR.dim);
+      expect(output).toContain(SGR.reset);
+      // content is preserved
+      expect(output).toContain('1. Node.js');
+      expect(output).toContain('URL: https://nodejs.org/');
+      expect(output).toContain('JS runtime');
+      // every style is closed: one reset per styled span (title, url, desc)
+      const resets = output.split(SGR.reset).length - 1;
+      expect(resets).toBe(3);
+    });
+
+    test('JSON output is never colorized, even with color:true', () => {
+      const output = formatResults(one, { json: true, color: true });
+      expect(output).not.toMatch(ANSI);
+      expect(JSON.parse(output)).toEqual(one);
     });
   });
 });

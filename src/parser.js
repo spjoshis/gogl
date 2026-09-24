@@ -10,8 +10,9 @@ export const MAX_RESULTS = 20;
  * @param {NodeJS.ProcessEnv} [env=process.env] - environment used to seed
  *   defaults (GOGL_ENGINE, GOGL_RESULTS, GOGL_JSON); CLI flags always win.
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
- *   engine: string, help: boolean, version: boolean, envWarnings: string[],
- *   cache: boolean, cacheTtlSeconds: number|undefined, clearCache: boolean }}
+ *   engine: string, color: ('auto'|'always'|'never'), dedupe: boolean,
+ *   help: boolean, version: boolean, envWarnings: string[], cache: boolean,
+ *   cacheTtlSeconds: number|undefined, clearCache: boolean }}
  * @throws {Error} on unknown flags, an invalid --results value, an invalid
  *   --cache-ttl value, or an unsupported --engine value (unless --help/--version
  *   is present, which always wins). Invalid env vars never throw; they're
@@ -25,6 +26,8 @@ export function parseArgs(argv, env = process.env) {
     results: DEFAULT_RESULTS,
     clamped: false,
     engine: readEnvEngine(env, envWarnings),
+    color: 'auto',
+    dedupe: true,
     help: false,
     version: false,
     envWarnings,
@@ -74,6 +77,18 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '--json') {
       options.json = true;
+      continue;
+    }
+    if (token === '--color') {
+      options.color = 'always';
+      continue;
+    }
+    if (token === '--no-color') {
+      options.color = 'never';
+      continue;
+    }
+    if (token === '--no-dedupe' || token === '--no-dedup') {
+      options.dedupe = false;
       continue;
     }
     if (token === '-n' || token === '--results') {

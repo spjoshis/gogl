@@ -25,6 +25,9 @@ describe('CLI (non-network paths)', () => {
     expect(stdout).toContain('Usage: @google');
     expect(stdout).toContain('--json');
     expect(stdout).toContain('--engine');
+    expect(stdout).toContain('--color');
+    expect(stdout).toContain('--no-color');
+    expect(stdout).toContain('--no-dedupe');
   });
 
   test('--version prints the package version and exits 0', () => {

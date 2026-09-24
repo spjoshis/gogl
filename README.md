@@ -68,6 +68,9 @@ npx @spjoshis/gogl "your query"
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
 | `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
+| `--color` | Force colorized output (even when piped) |
+| `--no-color` | Disable colorized output |
+| `--no-dedupe` | Keep duplicate-URL results (deduplicated by default) |
 | `--cache` | Reuse a fresh cached result instead of searching again (see [Caching](#-caching)) |
 | `--cache-ttl <seconds>` | How long a cached result stays fresh; implies `--cache` (default 3600) |
 | `--no-cache` | Force a live search, overriding `--cache`/`--cache-ttl` |
@@ -80,9 +83,30 @@ npx @spjoshis/gogl "your query"
 @google -n 5 nodejs streams        # limit to 5 results
 @google --json "rust async"        # machine-readable JSON output
 @google --engine duckduckgo nodejs # search DuckDuckGo instead of Google
+@google --no-color nodejs          # plain output, no ANSI colors
 @google --cache nodejs streams     # reuse a cached result if less than an hour old
 @google --help                     # usage
 ```
+
+### Colorized output
+
+Results are colorized to make them easier to scan: the numbered title is bold,
+the URL is cyan, and the description is dimmed. Color is applied **automatically
+only when writing to a terminal**, so piping or redirecting stays plain.
+
+- Force it on or off with `--color` / `--no-color`.
+- In `auto` mode, `gogl` honors the [`NO_COLOR`](https://no-color.org) convention
+  (any non-empty value disables color) and `FORCE_COLOR` (enables it off a TTY).
+- `--json` output is **never** colorized, so it stays machine-parseable.
+
+### Result deduplication
+
+Search results sometimes repeat the same page under cosmetically different URLs
+(a trailing slash, a `#fragment`, or a differently-cased host). By default
+`gogl` removes these duplicates, **keeping the first (highest-ranked)** copy so
+ordering is preserved. URLs are compared after normalizing scheme/host case,
+dropping the fragment, and ignoring a trailing slash; the query string is kept,
+so `?q=1` and `?q=2` stay distinct. Pass `--no-dedupe` to see the raw list.
 
 > In `--json` mode, results are printed to **stdout** as a JSON array while the
 > progress banner is sent to **stderr**, so `@google --json "q" | jq` stays clean.
@@ -406,7 +430,7 @@ Process results with other commands:
 You can also use @spjoshis/gogl as a library in your Node.js projects:
 
 ```javascript
-import { search, formatResults } from '@spjoshis/gogl';
+import { search, formatResults, dedupeResults } from '@spjoshis/gogl';
 
 // Perform search (options are optional and backward compatible)
 const results = await search('nodejs');
@@ -414,9 +438,13 @@ const fewer = await search('nodejs', { results: 5 }); // limit result count
 const viaDdg = await search('nodejs', { engine: 'duckduckgo' }); // alternate engine
 const cached = await search('nodejs', { cache: true, cacheTtlSeconds: 300 }); // reuse a fresh cached result
 
+// Optionally drop duplicate-URL results (keeps the first occurrence)
+const unique = dedupeResults(results);
+
 // Format results
-const formatted = formatResults(results);
-const asJson = formatResults(results, { json: true }); // JSON string
+const formatted = formatResults(unique);
+const colored = formatResults(unique, { color: true }); // ANSI-colored string
+const asJson = formatResults(unique, { json: true }); // JSON string
 
 // Print results
 console.log(formatted);
@@ -441,6 +469,8 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_ENGINE` | Default `--engine` value | `export GOGL_ENGINE=duckduckgo` |
 | `GOGL_RESULTS` | Default `--results` value | `export GOGL_RESULTS=5` |
 | `GOGL_JSON` | Default `--json` value | `export GOGL_JSON=true` (also accepts `1`/`yes`, and `false`/`0`/`no`) |
+| `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) | unset |
+| `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
 | `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
 | `GOGL_CACHE_TTL` | Default cache TTL in seconds (a `--cache-ttl` flag wins over this) | `3600` (1 hour) |
 
@@ -458,8 +488,8 @@ export GOGL_RESULTS=5
 
 ### CLI Options
 
-See [Options](#options) above for the supported flags (`--results`, `--json`, `--cache`,
-`--engine`, `--help`, `--version`). Additional options may be added:
+See [Options](#options) above for the supported flags (`--results`, `--json`, `--color`,
+`--cache`, `--engine`, `--help`, `--version`). Additional options may be added:
 
 ```bash
 # Planned features:
@@ -592,8 +622,9 @@ Planned features and improvements:
 - [x] Custom number of results
 - [ ] Result caching
 - [x] Multiple search engine support (Google, DuckDuckGo)
-- [ ] Rich terminal formatting (colors, tables)
-- [ ] Result deduplication
+- [x] Colorized terminal output
+- [ ] Rich table/box formatting
+- [x] Result deduplication
 - [ ] Search history
 - [ ] Configuration file support
 
@@ -602,8 +633,8 @@ Planned features and improvements:
 - **Package Size:** ~2.3 kB (minified)
 - **Dependencies:** 1 (Playwright)
 - **Test Coverage:** 80%+
-- **Latest Version:** 1.2.0
-- **Last Updated:** 2026-09-21
+- **Latest Version:** 1.4.0
+- **Last Updated:** 2026-09-24
 
 ## 🔐 Security
 

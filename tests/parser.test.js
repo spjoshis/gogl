@@ -131,6 +131,43 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--color / --no-color', () => {
+    test('defaults to auto', () => {
+      expect(parseArgs(['nodejs']).color).toBe('auto');
+    });
+
+    test('--color sets always and keeps the query', () => {
+      const result = parseArgs(['--color', 'nodejs']);
+      expect(result.color).toBe('always');
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('--no-color sets never', () => {
+      expect(parseArgs(['--no-color', 'nodejs']).color).toBe('never');
+    });
+
+    test('last color flag wins', () => {
+      expect(parseArgs(['--color', '--no-color', 'nodejs']).color).toBe('never');
+      expect(parseArgs(['--no-color', '--color', 'nodejs']).color).toBe('always');
+    });
+  });
+
+  describe('--no-dedupe', () => {
+    test('dedupe defaults on', () => {
+      expect(parseArgs(['nodejs']).dedupe).toBe(true);
+    });
+
+    test('--no-dedupe turns it off and keeps the query', () => {
+      const result = parseArgs(['--no-dedupe', 'nodejs']);
+      expect(result.dedupe).toBe(false);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('--no-dedup alias also works', () => {
+      expect(parseArgs(['--no-dedup', 'nodejs']).dedupe).toBe(false);
+    });
+  });
+
   describe('--help / --version', () => {
     test('should set help for --help and -h', () => {
       expect(parseArgs(['--help']).help).toBe(true);
