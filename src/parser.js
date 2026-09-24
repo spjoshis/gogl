@@ -2,6 +2,8 @@ import { DEFAULT_ENGINE, ENGINE_NAMES, resolveEngine } from './engines/index.js'
 
 export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
+export const DEFAULT_MAX_RETRIES = 2;
+export const DEFAULT_TIMEOUT_SECONDS = 30;
 
 /**
  * Parse CLI arguments into a normalized options object.
@@ -12,9 +14,10 @@ export const MAX_RESULTS = 20;
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
  *   engine: string, color: ('auto'|'always'|'never'), dedupe: boolean,
  *   help: boolean, version: boolean, envWarnings: string[], cache: boolean,
- *   cacheTtlSeconds: number|undefined, clearCache: boolean }}
- * @throws {Error} on unknown flags, an invalid --results value, an invalid
- *   --cache-ttl value, or an unsupported --engine value (unless --help/--version
+ *   cacheTtlSeconds: number|undefined, clearCache: boolean, maxRetries: number,
+ *   timeoutSeconds: number }}
+ * @throws {Error} on unknown flags, an invalid --results/--cache-ttl/--retries/
+ *   --timeout value, or an unsupported --engine value (unless --help/--version
  *   is present, which always wins). Invalid env vars never throw; they're
  *   reported via `envWarnings` and the built-in default is used instead.
  */
@@ -33,7 +36,9 @@ export function parseArgs(argv, env = process.env) {
     envWarnings,
     cache: false,
     cacheTtlSeconds: undefined,
-    clearCache: false
+    clearCache: false,
+    maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', DEFAULT_MAX_RETRIES, envWarnings),
+    timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', DEFAULT_TIMEOUT_SECONDS, envWarnings)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -55,6 +60,10 @@ export function parseArgs(argv, env = process.env) {
   let noCacheRequested = false;
   let sawCacheTtl = false;
   let rawCacheTtl = null;
+  let sawRetries = false;
+  let rawRetries = null;
+  let sawTimeout = false;
+  let rawTimeout = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -151,6 +160,38 @@ export function parseArgs(argv, env = process.env) {
       sawCacheTtl = true;
       continue;
     }
+    if (token === '-r' || token === '--retries') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--retries requires a value');
+        continue;
+      }
+      rawRetries = value;
+      sawRetries = true;
+      i++; // consume the value token
+      continue;
+    }
+    if (token.startsWith('--retries=')) {
+      rawRetries = token.slice('--retries='.length);
+      sawRetries = true;
+      continue;
+    }
+    if (token === '--timeout') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--timeout requires a value');
+        continue;
+      }
+      rawTimeout = value;
+      sawTimeout = true;
+      i++; // consume the value token
+      continue;
+    }
+    if (token.startsWith('--timeout=')) {
+      rawTimeout = token.slice('--timeout='.length);
+      sawTimeout = true;
+      continue;
+    }
 
     // Any other flag-looking token is unknown. A lone '-' is treated as query.
     if (token.length > 1 && token.startsWith('-')) {
@@ -198,6 +239,22 @@ export function parseArgs(argv, env = process.env) {
   // where --cache/--cache-ttl appear relative to it.
   options.cache = noCacheRequested ? false : cacheRequested;
 
+  if (sawRetries) {
+    try {
+      options.maxRetries = normalizePositiveInt(rawRetries, '--retries');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawTimeout) {
+    try {
+      options.timeoutSeconds = normalizePositiveInt(rawTimeout, '--timeout');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
   if (deferredError) {
     throw deferredError;
   }
@@ -238,6 +295,19 @@ function readEnvEngine(env, envWarnings) {
   } catch {
     envWarnings.push(`Ignoring GOGL_ENGINE=${raw}: unknown engine. Supported: ${ENGINE_NAMES.join(', ')}.`);
     return DEFAULT_ENGINE;
+  }
+}
+
+function readEnvPositiveInt(env, varName, defaultValue, envWarnings) {
+  const raw = env && env[varName];
+  if (!raw) {
+    return defaultValue;
+  }
+  try {
+    return normalizePositiveInt(raw, varName);
+  } catch {
+    envWarnings.push(`Ignoring ${varName}=${raw}: must be a positive integer.`);
+    return defaultValue;
   }
 }
 

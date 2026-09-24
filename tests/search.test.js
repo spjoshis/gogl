@@ -30,6 +30,12 @@ describe('search', () => {
     expect(results.length).toBe(0);
   });
 
+  test('should accept a custom timeoutMs without affecting the empty-query short-circuit', async () => {
+    const results = await search('', { timeoutMs: 5000 });
+    expect(Array.isArray(results)).toBe(true);
+    expect(results.length).toBe(0);
+  });
+
   test('should default to the google engine', async () => {
     const results = await search('', { engine: 'google' });
     expect(Array.isArray(results)).toBe(true);
