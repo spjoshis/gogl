@@ -10,11 +10,12 @@ export const MAX_RESULTS = 20;
  * @param {NodeJS.ProcessEnv} [env=process.env] - environment used to seed
  *   defaults (GOGL_ENGINE, GOGL_RESULTS, GOGL_JSON); CLI flags always win.
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
- *   engine: string, help: boolean, version: boolean, envWarnings: string[] }}
- * @throws {Error} on unknown flags, an invalid --results value, or an
- *   unsupported --engine value (unless --help/--version is present, which
- *   always wins). Invalid env vars never throw; they're reported via
- *   `envWarnings` and the built-in default is used instead.
+ *   engine: string, help: boolean, version: boolean, envWarnings: string[],
+ *   cache: boolean, cacheTtlSeconds: number|undefined, clearCache: boolean }}
+ * @throws {Error} on unknown flags, an invalid --results value, an invalid
+ *   --cache-ttl value, or an unsupported --engine value (unless --help/--version
+ *   is present, which always wins). Invalid env vars never throw; they're
+ *   reported via `envWarnings` and the built-in default is used instead.
  */
 export function parseArgs(argv, env = process.env) {
   const envWarnings = [];
@@ -26,7 +27,10 @@ export function parseArgs(argv, env = process.env) {
     engine: readEnvEngine(env, envWarnings),
     help: false,
     version: false,
-    envWarnings
+    envWarnings,
+    cache: false,
+    cacheTtlSeconds: undefined,
+    clearCache: false
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -44,6 +48,10 @@ export function parseArgs(argv, env = process.env) {
   let rawResults = null;
   let sawEngine = false;
   let rawEngine = null;
+  let cacheRequested = false;
+  let noCacheRequested = false;
+  let sawCacheTtl = false;
+  let rawCacheTtl = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -100,6 +108,34 @@ export function parseArgs(argv, env = process.env) {
       sawEngine = true;
       continue;
     }
+    if (token === '--cache') {
+      cacheRequested = true;
+      continue;
+    }
+    if (token === '--no-cache') {
+      noCacheRequested = true;
+      continue;
+    }
+    if (token === '--clear-cache') {
+      options.clearCache = true;
+      continue;
+    }
+    if (token === '--cache-ttl') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--cache-ttl requires a value');
+        continue;
+      }
+      rawCacheTtl = value;
+      sawCacheTtl = true;
+      i++; // consume the value token
+      continue;
+    }
+    if (token.startsWith('--cache-ttl=')) {
+      rawCacheTtl = token.slice('--cache-ttl='.length);
+      sawCacheTtl = true;
+      continue;
+    }
 
     // Any other flag-looking token is unknown. A lone '-' is treated as query.
     if (token.length > 1 && token.startsWith('-')) {
@@ -134,6 +170,19 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawCacheTtl) {
+    try {
+      options.cacheTtlSeconds = normalizePositiveInt(rawCacheTtl, '--cache-ttl');
+      cacheRequested = true; // setting a TTL implies you want caching on
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  // --no-cache is an explicit escape hatch and always wins, regardless of
+  // where --cache/--cache-ttl appear relative to it.
+  options.cache = noCacheRequested ? false : cacheRequested;
+
   if (deferredError) {
     throw deferredError;
   }
@@ -151,6 +200,13 @@ function normalizeResults(raw) {
     throw new Error('--results must be a positive integer');
   }
   return { value: Math.min(value, MAX_RESULTS), clamped: value > MAX_RESULTS };
+}
+
+function normalizePositiveInt(raw, flagName) {
+  if (!/^\d+$/.test(raw) || Number.parseInt(raw, 10) < 1) {
+    throw new Error(`${flagName} must be a positive integer`);
+  }
+  return Number.parseInt(raw, 10);
 }
 
 // Env vars only ever *seed defaults*: an invalid value is reported via

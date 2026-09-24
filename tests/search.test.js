@@ -1,4 +1,9 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { search } from '../src/search.js';
+import { writeEntry, makeKey } from '../src/cache.js';
 
 describe('search', () => {
   test('should handle empty query', async () => {
@@ -37,6 +42,66 @@ describe('search', () => {
 
   test('should reject an unknown engine before launching a browser', async () => {
     await expect(search('nodejs', { engine: 'bing' })).rejects.toThrow(/Unknown engine: bing/);
+  });
+
+  describe('caching', () => {
+    let dir;
+    let originalCacheDir;
+
+    beforeEach(() => {
+      dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-search-cache-'));
+      originalCacheDir = process.env.GOGL_CACHE_DIR;
+      process.env.GOGL_CACHE_DIR = dir;
+    });
+
+    afterEach(() => {
+      rmSync(dir, { recursive: true, force: true });
+      if (originalCacheDir === undefined) {
+        delete process.env.GOGL_CACHE_DIR;
+      } else {
+        process.env.GOGL_CACHE_DIR = originalCacheDir;
+      }
+    });
+
+    test('returns a fresh cached entry without launching a browser', async () => {
+      const seeded = [{ title: 'Cached', url: 'https://cached.example', description: 'from cache' }];
+      const key = makeKey({ engine: 'google', query: 'nodejs', results: 10 });
+      writeEntry(dir, key, { engine: 'google', query: 'nodejs', results: 10, data: seeded });
+
+      const resultsOut = await search('nodejs', { cache: true });
+      expect(resultsOut).toEqual(seeded);
+    }, 2000);
+
+    test('ignores a cached entry for a different engine/result-count key', async () => {
+      const seeded = [{ title: 'Cached', url: 'https://cached.example', description: 'from cache' }];
+      const key = makeKey({ engine: 'google', query: 'nodejs', results: 10 });
+      writeEntry(dir, key, { engine: 'google', query: 'nodejs', results: 10, data: seeded });
+
+      // Different engine -> different key -> cache miss -> unknown-engine rejection
+      // proves it never returned the seeded 'google' entry.
+      await expect(search('nodejs', { cache: true, engine: 'bing' })).rejects.toThrow(/Unknown engine/);
+    });
+
+    test('cache is off by default even if a fresh matching entry exists', async () => {
+      const seeded = [{ title: 'Cached', url: 'https://cached.example', description: 'from cache' }];
+      const key = makeKey({ engine: 'google', query: '', results: 10 });
+      writeEntry(dir, key, { engine: 'google', query: '', results: 10, data: seeded });
+
+      const resultsOut = await search('', { cache: true });
+      expect(resultsOut).toEqual([]);
+    });
+
+    (process.env.LIVE_TESTS ? test : test.skip)(
+      'writes a successful live search result to the cache',
+      async () => {
+        const first = await search('nodejs', { cache: true, results: 3 });
+        expect(first.length).toBeGreaterThan(0);
+
+        const second = await search('nodejs', { cache: true, results: 3 });
+        expect(second).toEqual(first);
+      },
+      60000
+    );
   });
 
   // Integration test - only runs if LIVE_TESTS env var is set
