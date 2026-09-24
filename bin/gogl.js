@@ -9,6 +9,7 @@ import { formatResults } from '../src/formatter.js';
 import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
 import { resolveColor } from '../src/color.js';
 import { dedupeResults } from '../src/dedupe.js';
+import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../src/cache.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -21,6 +22,10 @@ Options:
       --color             Force colorized output
       --no-color          Disable colorized output
       --no-dedupe         Keep duplicate-URL results (deduped by default)
+      --cache              Reuse a fresh cached result instead of searching again
+      --cache-ttl <secs>   How long a cached result stays fresh (implies --cache; default ${DEFAULT_TTL_SECONDS})
+      --no-cache           Force a live search, overriding --cache/--cache-ttl
+      --clear-cache        Delete all cached results and exit
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -29,6 +34,8 @@ Examples:
   @google what is javascript
   @google -n 5 nodejs streams
   @google --engine duckduckgo nodejs streams
+  @google --cache nodejs streams          # reuse a cached result if less than an hour old
+  @google --cache-ttl 300 nodejs streams  # cache for 5 minutes instead
   @google --json "rust async" | jq '.[0].url'
 
 By default output is colorized only when writing to a terminal. Colors follow
@@ -60,6 +67,13 @@ async function main() {
     process.exit(0);
   }
 
+  if (options.clearCache) {
+    const dir = resolveCacheDir();
+    const removed = clearCache(dir);
+    console.log(`Cleared ${removed} cached ${removed === 1 ? 'entry' : 'entries'} from ${dir}.`);
+    process.exit(0);
+  }
+
   if (!options.query) {
     console.error('Usage: @google <query>');
     console.error('Example: @google what\'s today\'s date');
@@ -83,7 +97,12 @@ async function main() {
       console.log(banner);
     }
 
-    const rawResults = await search(options.query, { results: options.results, engine: options.engine });
+    const rawResults = await search(options.query, {
+      results: options.results,
+      engine: options.engine,
+      cache: options.cache,
+      cacheTtlSeconds: options.cacheTtlSeconds
+    });
     const results = options.dedupe ? dedupeResults(rawResults) : rawResults;
 
     const color = resolveColor({

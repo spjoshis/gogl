@@ -209,6 +209,59 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--cache / --no-cache / --cache-ttl / --clear-cache', () => {
+    test('cache is off by default', () => {
+      const result = parseArgs(['nodejs']);
+      expect(result.cache).toBe(false);
+      expect(result.cacheTtlSeconds).toBeUndefined();
+      expect(result.clearCache).toBe(false);
+    });
+
+    test('--cache turns caching on', () => {
+      expect(parseArgs(['--cache', 'nodejs']).cache).toBe(true);
+    });
+
+    test('--cache-ttl implies --cache and sets the TTL in seconds', () => {
+      const result = parseArgs(['--cache-ttl', '60', 'nodejs']);
+      expect(result.cache).toBe(true);
+      expect(result.cacheTtlSeconds).toBe(60);
+    });
+
+    test('--cache-ttl=N form works', () => {
+      const result = parseArgs(['--cache-ttl=30', 'nodejs']);
+      expect(result.cache).toBe(true);
+      expect(result.cacheTtlSeconds).toBe(30);
+    });
+
+    test('--no-cache always wins, regardless of order relative to --cache/--cache-ttl', () => {
+      expect(parseArgs(['--cache', '--no-cache', 'nodejs']).cache).toBe(false);
+      expect(parseArgs(['--no-cache', '--cache', 'nodejs']).cache).toBe(false);
+      expect(parseArgs(['--no-cache', '--cache-ttl', '60', 'nodejs']).cache).toBe(false);
+    });
+
+    test('throws for a non-numeric --cache-ttl', () => {
+      expect(() => parseArgs(['--cache-ttl', 'abc', 'nodejs'])).toThrow(/positive integer/);
+    });
+
+    test('throws for a zero or negative --cache-ttl', () => {
+      expect(() => parseArgs(['--cache-ttl', '0', 'nodejs'])).toThrow(/positive integer/);
+    });
+
+    test('throws when --cache-ttl has no value', () => {
+      expect(() => parseArgs(['nodejs', '--cache-ttl'])).toThrow(/--cache-ttl requires a value/);
+    });
+
+    test('--help wins over an invalid --cache-ttl (no throw)', () => {
+      expect(parseArgs(['--help', '--cache-ttl', 'abc']).help).toBe(true);
+    });
+
+    test('--clear-cache sets clearCache without requiring cache/query handling', () => {
+      const result = parseArgs(['--clear-cache']);
+      expect(result.clearCache).toBe(true);
+      expect(result.query).toBe('');
+    });
+  });
+
   describe('-- separator', () => {
     test('should treat tokens after -- as literal query', () => {
       const result = parseArgs(['--', '--json']);

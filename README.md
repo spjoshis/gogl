@@ -71,6 +71,10 @@ npx @spjoshis/gogl "your query"
 | `--color` | Force colorized output (even when piped) |
 | `--no-color` | Disable colorized output |
 | `--no-dedupe` | Keep duplicate-URL results (deduplicated by default) |
+| `--cache` | Reuse a fresh cached result instead of searching again (see [Caching](#-caching)) |
+| `--cache-ttl <seconds>` | How long a cached result stays fresh; implies `--cache` (default 3600) |
+| `--no-cache` | Force a live search, overriding `--cache`/`--cache-ttl` |
+| `--clear-cache` | Delete all cached results and exit |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -80,6 +84,7 @@ npx @spjoshis/gogl "your query"
 @google --json "rust async"        # machine-readable JSON output
 @google --engine duckduckgo nodejs # search DuckDuckGo instead of Google
 @google --no-color nodejs          # plain output, no ANSI colors
+@google --cache nodejs streams     # reuse a cached result if less than an hour old
 @google --help                     # usage
 ```
 
@@ -189,6 +194,7 @@ npx playwright install
 │   ├── search.js            # Playwright search orchestration (retry + engine dispatch)
 │   ├── parser.js            # CLI argument parsing
 │   ├── formatter.js         # Result formatting
+│   ├── cache.js             # On-disk result cache (opt-in, see Caching)
 │   └── engines/             # Per-engine URL building + DOM extraction
 │       ├── index.js         # Engine registry (google, duckduckgo)
 │       ├── google.js        # Google engine
@@ -281,6 +287,35 @@ The tool includes robust error handling:
 - **Startup Time:** ~3-5 seconds (browser launch)
 - **Search Time:** ~2-10 seconds (depends on network)
 - **Memory Usage:** ~150-200 MB (Chromium process)
+
+## 💾 Caching
+
+Every search launches a real headless browser (~3-10 seconds), and both
+engines apply anti-bot challenges to repeated automated traffic. Caching is an
+opt-in way to reuse a recent result instead of paying that cost — and that
+risk — again for the exact same search.
+
+```bash
+@google --cache nodejs streams              # cache miss: searches live, then saves the result
+@google --cache nodejs streams              # cache hit: returns instantly, no browser launch
+@google --cache-ttl 300 nodejs streams      # cache for 5 minutes instead of the 1 hour default
+@google --cache --no-cache nodejs streams   # --no-cache always wins: forces a live search
+@google --clear-cache                       # delete all cached results
+```
+
+- **Off by default** — a plain `@google <query>` always searches live; nothing
+  is cached or read unless you pass `--cache`/`--cache-ttl` or set
+  `GOGL_CACHE_DIR`/`GOGL_CACHE_TTL`.
+- **Cache key** is derived from the engine, the normalized query text, and the
+  result count, so `--engine duckduckgo` and a different `-n` never collide
+  with (or return) another search's cached entry. The query itself is hashed,
+  so it never appears in a cache filename.
+- **Storage:** one JSON file per search in `$GOGL_CACHE_DIR`, or
+  `$XDG_CACHE_HOME/gogl`, or `~/.cache/gogl` by default.
+- **Failure is silent:** if the cache directory can't be read or written
+  (permissions, full disk, corrupt file), `gogl` falls back to a live search
+  rather than failing the command.
+- Also usable as a library option: `search('nodejs', { cache: true, cacheTtlSeconds: 300 })`.
 
 ## 🐛 Troubleshooting
 
@@ -401,6 +436,7 @@ import { search, formatResults, dedupeResults } from '@spjoshis/gogl';
 const results = await search('nodejs');
 const fewer = await search('nodejs', { results: 5 }); // limit result count
 const viaDdg = await search('nodejs', { engine: 'duckduckgo' }); // alternate engine
+const cached = await search('nodejs', { cache: true, cacheTtlSeconds: 300 }); // reuse a fresh cached result
 
 // Optionally drop duplicate-URL results (keeps the first occurrence)
 const unique = dedupeResults(results);
@@ -425,15 +461,19 @@ console.log(formatted);
 
 ### Environment Variables
 
-| Variable | Effect |
-|----------|--------|
-| `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) |
-| `FORCE_COLOR` | Enables colorized output even when not writing to a terminal |
+| Variable | Purpose | Default |
+|----------|---------|---------|
+| `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) | unset |
+| `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
+| `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
+| `GOGL_CACHE_TTL` | Default cache TTL in seconds (a `--cache-ttl` flag wins over this) | `3600` (1 hour) |
+
+See [Caching](#-caching) for how the cache variables are used.
 
 ### CLI Options
 
-See [Options](#options) above for the supported flags (`--results`, `--json`,
-`--engine`, `--help`, `--version`). Additional options may be added:
+See [Options](#options) above for the supported flags (`--results`, `--json`, `--color`,
+`--cache`, `--engine`, `--help`, `--version`). Additional options may be added:
 
 ```bash
 # Planned features:
