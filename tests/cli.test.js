@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
@@ -11,19 +11,11 @@ const pkg = JSON.parse(
 
 // Run the CLI and always capture stdout/stderr/status, whether it exits 0 or not.
 function runCli(args, envOverrides = {}) {
-  try {
-    const stdout = execFileSync('node', [binPath, ...args], {
-      encoding: 'utf8',
-      env: { ...process.env, ...envOverrides }
-    });
-    return { status: 0, stdout, stderr: '' };
-  } catch (error) {
-    return {
-      status: error.status,
-      stdout: error.stdout?.toString() ?? '',
-      stderr: error.stderr?.toString() ?? ''
-    };
-  }
+  const result = spawnSync('node', [binPath, ...args], {
+    encoding: 'utf8',
+    env: { ...process.env, ...envOverrides }
+  });
+  return { status: result.status, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 
 describe('CLI (non-network paths)', () => {
@@ -117,5 +109,31 @@ describe('CLI --clear-cache (non-network, real filesystem)', () => {
     expect(status).toBe(0);
     expect(stdout).toContain('Cleared 1 cached entry');
     expect(readdirSync(dir).length).toBe(0);
+  });
+});
+
+describe('CLI environment variable defaults (non-network paths)', () => {
+  test('an invalid GOGL_ENGINE prints a warning but --help still wins', () => {
+    const { status, stdout, stderr } = runCli(['--help'], { GOGL_ENGINE: 'bing' });
+    expect(status).toBe(0);
+    expect(stdout).toContain('Usage: @google');
+    expect(stderr).toMatch(/GOGL_ENGINE/);
+  });
+
+  test('an invalid GOGL_RESULTS prints a warning but --version still wins', () => {
+    const { status, stderr } = runCli(['--version'], { GOGL_RESULTS: 'abc' });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/GOGL_RESULTS/);
+  });
+
+  test('an invalid GOGL_JSON prints a warning but --help still wins', () => {
+    const { status, stderr } = runCli(['--help'], { GOGL_JSON: 'maybe' });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/GOGL_JSON/);
+  });
+
+  test('valid env vars print no warnings', () => {
+    const { stderr } = runCli(['--help'], { GOGL_ENGINE: 'duckduckgo', GOGL_RESULTS: '5', GOGL_JSON: 'true' });
+    expect(stderr).toBe('');
   });
 });
