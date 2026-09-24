@@ -7,6 +7,7 @@ import { search } from '../src/index.js';
 import { parseArgs, MAX_RESULTS } from '../src/parser.js';
 import { formatResults } from '../src/formatter.js';
 import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
+import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../src/cache.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -16,6 +17,10 @@ Options:
   -n, --results <count>   Number of results to return (1-20, default 10)
       --json              Output results as JSON (to stdout)
       --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
+      --cache              Reuse a fresh cached result instead of searching again
+      --cache-ttl <secs>   How long a cached result stays fresh (implies --cache; default ${DEFAULT_TTL_SECONDS})
+      --no-cache           Force a live search, overriding --cache/--cache-ttl
+      --clear-cache        Delete all cached results and exit
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -24,6 +29,8 @@ Examples:
   @google what is javascript
   @google -n 5 nodejs streams
   @google --engine duckduckgo nodejs streams
+  @google --cache nodejs streams          # reuse a cached result if less than an hour old
+  @google --cache-ttl 300 nodejs streams  # cache for 5 minutes instead
   @google --json "rust async" | jq '.[0].url'`;
 
 function getVersion() {
@@ -52,6 +59,13 @@ async function main() {
     process.exit(0);
   }
 
+  if (options.clearCache) {
+    const dir = resolveCacheDir();
+    const removed = clearCache(dir);
+    console.log(`Cleared ${removed} cached ${removed === 1 ? 'entry' : 'entries'} from ${dir}.`);
+    process.exit(0);
+  }
+
   if (!options.query) {
     console.error('Usage: @google <query>');
     console.error('Example: @google what\'s today\'s date');
@@ -75,7 +89,12 @@ async function main() {
       console.log(banner);
     }
 
-    const results = await search(options.query, { results: options.results, engine: options.engine });
+    const results = await search(options.query, {
+      results: options.results,
+      engine: options.engine,
+      cache: options.cache,
+      cacheTtlSeconds: options.cacheTtlSeconds
+    });
     const formatted = formatResults(results, { json: options.json });
 
     console.log(formatted);
