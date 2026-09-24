@@ -7,6 +7,7 @@ import { search } from '../src/index.js';
 import { parseArgs, MAX_RESULTS } from '../src/parser.js';
 import { formatResults } from '../src/formatter.js';
 import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
+import { resolveColor } from '../src/color.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -16,6 +17,8 @@ Options:
   -n, --results <count>   Number of results to return (1-20, default 10)
       --json              Output results as JSON (to stdout)
       --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
+      --color             Force colorized output
+      --no-color          Disable colorized output
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -24,7 +27,10 @@ Examples:
   @google what is javascript
   @google -n 5 nodejs streams
   @google --engine duckduckgo nodejs streams
-  @google --json "rust async" | jq '.[0].url'`;
+  @google --json "rust async" | jq '.[0].url'
+
+By default output is colorized only when writing to a terminal. Colors follow
+the NO_COLOR / FORCE_COLOR conventions and are never applied to --json output.`;
 
 function getVersion() {
   const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
@@ -76,7 +82,13 @@ async function main() {
     }
 
     const results = await search(options.query, { results: options.results, engine: options.engine });
-    const formatted = formatResults(results, { json: options.json });
+
+    const color = resolveColor({
+      mode: options.color,
+      json: options.json,
+      isTTY: Boolean(process.stdout.isTTY)
+    });
+    const formatted = formatResults(results, { json: options.json, color });
 
     console.log(formatted);
   } catch (error) {

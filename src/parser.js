@@ -8,7 +8,8 @@ export const MAX_RESULTS = 20;
  *
  * @param {string[]} argv - argument vector (already sliced past node/script)
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
- *   engine: string, help: boolean, version: boolean }}
+ *   engine: string, color: ('auto'|'always'|'never'), help: boolean,
+ *   version: boolean }}
  * @throws {Error} on unknown flags, an invalid --results value, or an
  *   unsupported --engine value (unless --help/--version is present, which
  *   always wins)
@@ -20,6 +21,7 @@ export function parseArgs(argv) {
     results: DEFAULT_RESULTS,
     clamped: false,
     engine: DEFAULT_ENGINE,
+    color: 'auto',
     help: false,
     version: false
   };
@@ -55,6 +57,14 @@ export function parseArgs(argv) {
     }
     if (token === '--json') {
       options.json = true;
+      continue;
+    }
+    if (token === '--color') {
+      options.color = 'always';
+      continue;
+    }
+    if (token === '--no-color') {
+      options.color = 'never';
       continue;
     }
     if (token === '-n' || token === '--results') {

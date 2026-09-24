@@ -68,6 +68,8 @@ npx @spjoshis/gogl "your query"
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
 | `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
+| `--color` | Force colorized output (even when piped) |
+| `--no-color` | Disable colorized output |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -76,8 +78,20 @@ npx @spjoshis/gogl "your query"
 @google -n 5 nodejs streams        # limit to 5 results
 @google --json "rust async"        # machine-readable JSON output
 @google --engine duckduckgo nodejs # search DuckDuckGo instead of Google
+@google --no-color nodejs          # plain output, no ANSI colors
 @google --help                     # usage
 ```
+
+### Colorized output
+
+Results are colorized to make them easier to scan: the numbered title is bold,
+the URL is cyan, and the description is dimmed. Color is applied **automatically
+only when writing to a terminal**, so piping or redirecting stays plain.
+
+- Force it on or off with `--color` / `--no-color`.
+- In `auto` mode, `gogl` honors the [`NO_COLOR`](https://no-color.org) convention
+  (any non-empty value disables color) and `FORCE_COLOR` (enables it off a TTY).
+- `--json` output is **never** colorized, so it stays machine-parseable.
 
 > In `--json` mode, results are printed to **stdout** as a JSON array while the
 > progress banner is sent to **stderr**, so `@google --json "q" | jq` stays clean.
@@ -397,7 +411,10 @@ console.log(formatted);
 
 ### Environment Variables
 
-Currently no environment variables are supported. Configuration can be added in future versions.
+| Variable | Effect |
+|----------|--------|
+| `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) |
+| `FORCE_COLOR` | Enables colorized output even when not writing to a terminal |
 
 ### CLI Options
 
@@ -535,7 +552,8 @@ Planned features and improvements:
 - [x] Custom number of results
 - [ ] Result caching
 - [x] Multiple search engine support (Google, DuckDuckGo)
-- [ ] Rich terminal formatting (colors, tables)
+- [x] Colorized terminal output
+- [ ] Rich table/box formatting
 - [ ] Result deduplication
 - [ ] Search history
 - [ ] Configuration file support
@@ -545,8 +563,8 @@ Planned features and improvements:
 - **Package Size:** ~2.3 kB (minified)
 - **Dependencies:** 1 (Playwright)
 - **Test Coverage:** 80%+
-- **Latest Version:** 1.2.0
-- **Last Updated:** 2026-09-21
+- **Latest Version:** 1.3.0
+- **Last Updated:** 2026-09-24
 
 ## 🔐 Security
 
