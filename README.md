@@ -461,14 +461,30 @@ console.log(formatted);
 
 ### Environment Variables
 
-| Variable | Purpose | Default |
+Set these to change the built-in defaults without typing flags every time. A
+CLI flag always overrides the matching environment variable.
+
+| Variable | Purpose | Default / Example |
 |----------|---------|---------|
+| `GOGL_ENGINE` | Default `--engine` value | `export GOGL_ENGINE=duckduckgo` |
+| `GOGL_RESULTS` | Default `--results` value | `export GOGL_RESULTS=5` |
+| `GOGL_JSON` | Default `--json` value | `export GOGL_JSON=true` (also accepts `1`/`yes`, and `false`/`0`/`no`) |
 | `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) | unset |
 | `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
 | `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
 | `GOGL_CACHE_TTL` | Default cache TTL in seconds (a `--cache-ttl` flag wins over this) | `3600` (1 hour) |
 
-See [Caching](#-caching) for how the cache variables are used.
+An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON` value is ignored with
+a warning on stderr; it never crashes the command, and the built-in default
+is used instead. See [Caching](#-caching) for how the cache env vars are used.
+
+```bash
+export GOGL_ENGINE=duckduckgo
+export GOGL_RESULTS=5
+
+@google nodejs streams        # uses duckduckgo, 5 results
+@google --engine google nodejs streams  # flag overrides the env default
+```
 
 ### CLI Options
 
