@@ -70,6 +70,7 @@ npx @spjoshis/gogl "your query"
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
 | `--color` | Force colorized output (even when piped) |
 | `--no-color` | Disable colorized output |
+| `--no-dedupe` | Keep duplicate-URL results (deduplicated by default) |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -92,6 +93,15 @@ only when writing to a terminal**, so piping or redirecting stays plain.
 - In `auto` mode, `gogl` honors the [`NO_COLOR`](https://no-color.org) convention
   (any non-empty value disables color) and `FORCE_COLOR` (enables it off a TTY).
 - `--json` output is **never** colorized, so it stays machine-parseable.
+
+### Result deduplication
+
+Search results sometimes repeat the same page under cosmetically different URLs
+(a trailing slash, a `#fragment`, or a differently-cased host). By default
+`gogl` removes these duplicates, **keeping the first (highest-ranked)** copy so
+ordering is preserved. URLs are compared after normalizing scheme/host case,
+dropping the fragment, and ignoring a trailing slash; the query string is kept,
+so `?q=1` and `?q=2` stay distinct. Pass `--no-dedupe` to see the raw list.
 
 > In `--json` mode, results are printed to **stdout** as a JSON array while the
 > progress banner is sent to **stderr**, so `@google --json "q" | jq` stays clean.
@@ -385,16 +395,20 @@ Process results with other commands:
 You can also use @spjoshis/gogl as a library in your Node.js projects:
 
 ```javascript
-import { search, formatResults } from '@spjoshis/gogl';
+import { search, formatResults, dedupeResults } from '@spjoshis/gogl';
 
 // Perform search (options are optional and backward compatible)
 const results = await search('nodejs');
 const fewer = await search('nodejs', { results: 5 }); // limit result count
 const viaDdg = await search('nodejs', { engine: 'duckduckgo' }); // alternate engine
 
+// Optionally drop duplicate-URL results (keeps the first occurrence)
+const unique = dedupeResults(results);
+
 // Format results
-const formatted = formatResults(results);
-const asJson = formatResults(results, { json: true }); // JSON string
+const formatted = formatResults(unique);
+const colored = formatResults(unique, { color: true }); // ANSI-colored string
+const asJson = formatResults(unique, { json: true }); // JSON string
 
 // Print results
 console.log(formatted);
@@ -554,7 +568,7 @@ Planned features and improvements:
 - [x] Multiple search engine support (Google, DuckDuckGo)
 - [x] Colorized terminal output
 - [ ] Rich table/box formatting
-- [ ] Result deduplication
+- [x] Result deduplication
 - [ ] Search history
 - [ ] Configuration file support
 
@@ -563,7 +577,7 @@ Planned features and improvements:
 - **Package Size:** ~2.3 kB (minified)
 - **Dependencies:** 1 (Playwright)
 - **Test Coverage:** 80%+
-- **Latest Version:** 1.3.0
+- **Latest Version:** 1.4.0
 - **Last Updated:** 2026-09-24
 
 ## 🔐 Security
