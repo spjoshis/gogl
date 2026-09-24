@@ -71,6 +71,17 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(1);
     expect(stderr).toMatch(/positive integer/i);
   });
+
+  test('--help documents -q/--quiet', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--quiet');
+  });
+
+  test('-q with no query still errors (quiet only affects the banner)', () => {
+    const { status, stderr } = runCli(['-q']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/usage/i);
+  });
 });
 
 describe('CLI --clear-cache (non-network, real filesystem)', () => {

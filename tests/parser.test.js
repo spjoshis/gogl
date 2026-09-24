@@ -168,6 +168,22 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('-q / --quiet', () => {
+    test('defaults to false', () => {
+      expect(parseArgs(['nodejs']).quiet).toBe(false);
+    });
+
+    test('--quiet sets it and keeps the query', () => {
+      const result = parseArgs(['--quiet', 'nodejs']);
+      expect(result.quiet).toBe(true);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('-q shorthand works', () => {
+      expect(parseArgs(['-q', 'nodejs']).quiet).toBe(true);
+    });
+  });
+
   describe('--help / --version', () => {
     test('should set help for --help and -h', () => {
       expect(parseArgs(['--help']).help).toBe(true);

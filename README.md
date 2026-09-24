@@ -75,6 +75,7 @@ npx @spjoshis/gogl "your query"
 | `--cache-ttl <seconds>` | How long a cached result stays fresh; implies `--cache` (default 3600) |
 | `--no-cache` | Force a live search, overriding `--cache`/`--cache-ttl` |
 | `--clear-cache` | Delete all cached results and exit |
+| `-q, --quiet` | Suppress the "Searching..." progress banner |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -85,6 +86,7 @@ npx @spjoshis/gogl "your query"
 @google --engine duckduckgo nodejs # search DuckDuckGo instead of Google
 @google --no-color nodejs          # plain output, no ANSI colors
 @google --cache nodejs streams     # reuse a cached result if less than an hour old
+@google -q nodejs | grep -i tutorial  # no banner noise mixed into piped output
 @google --help                     # usage
 ```
 
