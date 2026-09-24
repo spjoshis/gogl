@@ -397,7 +397,26 @@ console.log(formatted);
 
 ### Environment Variables
 
-Currently no environment variables are supported. Configuration can be added in future versions.
+Set these to change the built-in defaults without typing flags every time. A
+CLI flag always overrides the matching environment variable.
+
+| Variable | Equivalent flag | Example |
+|----------|-----------------|---------|
+| `GOGL_ENGINE` | `--engine` | `export GOGL_ENGINE=duckduckgo` |
+| `GOGL_RESULTS` | `--results` | `export GOGL_RESULTS=5` |
+| `GOGL_JSON` | `--json` | `export GOGL_JSON=true` (also accepts `1`/`yes`, and `false`/`0`/`no`) |
+
+An unrecognized value (an unknown engine, a non-numeric result count, or an
+unrecognized `GOGL_JSON` value) is ignored with a warning on stderr; it never
+crashes the command, and the built-in default is used instead.
+
+```bash
+export GOGL_ENGINE=duckduckgo
+export GOGL_RESULTS=5
+
+@google nodejs streams        # uses duckduckgo, 5 results
+@google --engine google nodejs streams  # flag overrides the env default
+```
 
 ### CLI Options
 

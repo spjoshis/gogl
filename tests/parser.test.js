@@ -172,6 +172,80 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('environment variable defaults', () => {
+    test('GOGL_ENGINE sets the default engine when no --engine flag is given', () => {
+      const result = parseArgs(['nodejs'], { GOGL_ENGINE: 'duckduckgo' });
+      expect(result.engine).toBe('duckduckgo');
+    });
+
+    test('--engine flag overrides GOGL_ENGINE', () => {
+      const result = parseArgs(['--engine', 'google', 'nodejs'], { GOGL_ENGINE: 'duckduckgo' });
+      expect(result.engine).toBe('google');
+    });
+
+    test('an unsupported GOGL_ENGINE falls back to the default and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_ENGINE: 'bing' });
+      expect(result.engine).toBe('google');
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_ENGINE/);
+    });
+
+    test('GOGL_RESULTS sets the default result count when no --results flag is given', () => {
+      const result = parseArgs(['nodejs'], { GOGL_RESULTS: '5' });
+      expect(result.results).toBe(5);
+    });
+
+    test('--results flag overrides GOGL_RESULTS', () => {
+      const result = parseArgs(['--results', '3', 'nodejs'], { GOGL_RESULTS: '5' });
+      expect(result.results).toBe(3);
+    });
+
+    test('GOGL_RESULTS above the max is clamped like a CLI flag', () => {
+      const result = parseArgs(['nodejs'], { GOGL_RESULTS: '999' });
+      expect(result.results).toBe(20);
+      expect(result.clamped).toBe(true);
+    });
+
+    test('a non-numeric GOGL_RESULTS falls back to the default and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_RESULTS: 'abc' });
+      expect(result.results).toBe(10);
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_RESULTS/);
+    });
+
+    test('GOGL_JSON=true/1 sets the default json flag', () => {
+      expect(parseArgs(['nodejs'], { GOGL_JSON: 'true' }).json).toBe(true);
+      expect(parseArgs(['nodejs'], { GOGL_JSON: '1' }).json).toBe(true);
+    });
+
+    test('GOGL_JSON=false/0 keeps json off', () => {
+      expect(parseArgs(['nodejs'], { GOGL_JSON: 'false' }).json).toBe(false);
+      expect(parseArgs(['nodejs'], { GOGL_JSON: '0' }).json).toBe(false);
+    });
+
+    test('--json flag overrides a false-ish GOGL_JSON', () => {
+      const result = parseArgs(['--json', 'nodejs'], { GOGL_JSON: 'false' });
+      expect(result.json).toBe(true);
+    });
+
+    test('an unrecognized GOGL_JSON value falls back to the default and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_JSON: 'maybe' });
+      expect(result.json).toBe(false);
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_JSON/);
+    });
+
+    test('no env vars set means no warnings and unchanged defaults', () => {
+      const result = parseArgs(['nodejs'], {});
+      expect(result.envWarnings).toEqual([]);
+      expect(result.engine).toBe('google');
+      expect(result.results).toBe(10);
+      expect(result.json).toBe(false);
+    });
+
+    test('defaults to process.env when no env argument is passed', () => {
+      const result = parseArgs(['nodejs']);
+      expect(result.envWarnings).toEqual([]);
+    });
+  });
+
   describe('-- separator', () => {
     test('should treat tokens after -- as literal query', () => {
       const result = parseArgs(['--', '--json']);

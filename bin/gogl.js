@@ -20,6 +20,11 @@ Options:
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
 
+Environment variables (used as defaults; CLI flags always win):
+  GOGL_ENGINE             Default --engine value
+  GOGL_RESULTS            Default --results value
+  GOGL_JSON               Default --json value (true/false, 1/0, yes/no)
+
 Examples:
   @google what is javascript
   @google -n 5 nodejs streams
@@ -40,6 +45,10 @@ async function main() {
     console.error(`Error: ${error.message}`);
     console.error('Run "@google --help" for usage.');
     process.exit(1);
+  }
+
+  for (const warning of options.envWarnings) {
+    console.error(`Warning: ${warning}`);
   }
 
   if (options.help) {
