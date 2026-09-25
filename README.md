@@ -79,6 +79,7 @@ npx @spjoshis/gogl "your query"
 | `-r, --retries <n>` | Retry attempts on failure (default 2) |
 | `--timeout <seconds>` | Per-attempt page load timeout (default 30) |
 | `--date-range <d\|w\|m\|y>` | Restrict results to the past day/week/month/year (default: no restriction) |
+| `--no-config` | Skip the [config file](#-configuration-file) for this run |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -313,16 +314,44 @@ risk — again for the exact same search.
 - **Off by default** — a plain `@google <query>` always searches live; nothing
   is cached or read unless you pass `--cache`/`--cache-ttl` or set
   `GOGL_CACHE_DIR`/`GOGL_CACHE_TTL`.
-- **Cache key** is derived from the engine, the normalized query text, and the
-  result count, so `--engine duckduckgo` and a different `-n` never collide
-  with (or return) another search's cached entry. The query itself is hashed,
-  so it never appears in a cache filename.
+- **Cache key** is derived from the engine, the normalized query text, the
+  result count, and the date range, so `--engine duckduckgo`, a different
+  `-n`, or a different `--date-range` never collide with (or return) another
+  search's cached entry. The query itself is hashed, so it never appears in a
+  cache filename.
 - **Storage:** one JSON file per search in `$GOGL_CACHE_DIR`, or
   `$XDG_CACHE_HOME/gogl`, or `~/.cache/gogl` by default.
 - **Failure is silent:** if the cache directory can't be read or written
   (permissions, full disk, corrupt file), `gogl` falls back to a live search
   rather than failing the command.
 - Also usable as a library option: `search('nodejs', { cache: true, cacheTtlSeconds: 300 })`.
+
+## 🗂️ Configuration File
+
+Set your preferred defaults once instead of typing (or exporting) the same
+flags every time. Lowest-priority layer in the precedence chain — a CLI flag
+always wins, then an environment variable, then the config file, then the
+built-in default.
+
+```json
+{
+  "engine": "duckduckgo",
+  "results": 5,
+  "dateRange": "w"
+}
+```
+
+- **Location:** `$XDG_CONFIG_HOME/gogl/config.json`, or `~/.config/gogl/config.json`
+  by default. Override the path entirely with `GOGL_CONFIG`.
+- **Supported keys:** `engine`, `results`, `json`, `maxRetries`, `timeoutSeconds`,
+  `dateRange` — the same values each has as a CLI flag/env var.
+- **Optional and resilient:** no file is required; a missing file is a silent
+  no-op. An unknown key or an invalid value for a known key is ignored with a
+  warning on stderr rather than crashing the command — only that one key falls
+  back to its built-in default, everything else in the file still applies.
+- **`--no-config`** skips the config file for a single run (env vars and CLI
+  flags still apply) — useful for scripts that need to ignore whatever the
+  invoking user has configured locally.
 
 ## 🐛 Troubleshooting
 
@@ -483,11 +512,13 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_MAX_RETRIES` | Default `--retries` value | `2` |
 | `GOGL_TIMEOUT` | Default `--timeout` value in seconds | `30` |
 | `GOGL_DATE_RANGE` | Default `--date-range` value (`d`, `w`, `m`, or `y`) | unset (no restriction) |
+| `GOGL_CONFIG` | Path to the [config file](#-configuration-file) | `$XDG_CONFIG_HOME/gogl/config.json` or `~/.config/gogl/config.json` |
 
 An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`/`GOGL_DATE_RANGE`
 value is ignored with a warning on stderr; it never crashes the command, and the
 built-in default is used instead. See [Caching](#-caching) for how the cache env
-vars are used.
+vars are used, and [Configuration File](#-configuration-file) for the lowest-priority
+defaults layer these environment variables override.
 
 ```bash
 export GOGL_ENGINE=duckduckgo
@@ -637,7 +668,7 @@ Planned features and improvements:
 - [ ] Rich table/box formatting
 - [x] Result deduplication
 - [ ] Search history
-- [ ] Configuration file support
+- [x] Configuration file support
 
 ## 📊 Stats
 
