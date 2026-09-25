@@ -131,6 +131,37 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--date-range', () => {
+    test('defaults to undefined (no date restriction)', () => {
+      expect(parseArgs(['nodejs']).dateRange).toBeUndefined();
+    });
+
+    test.each(['d', 'w', 'm', 'y'])('accepts %s', (value) => {
+      const result = parseArgs(['--date-range', value, 'nodejs']);
+      expect(result.dateRange).toBe(value);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('accepts --date-range=w form', () => {
+      const result = parseArgs(['--date-range=w', 'nodejs']);
+      expect(result.dateRange).toBe('w');
+    });
+
+    test('throws for an unsupported value', () => {
+      expect(() => parseArgs(['--date-range', 'century', 'nodejs'])).toThrow(
+        /--date-range must be one of: d, w, m, y/
+      );
+    });
+
+    test('throws when --date-range has no value', () => {
+      expect(() => parseArgs(['nodejs', '--date-range'])).toThrow(/--date-range requires a value/);
+    });
+
+    test('should let --help win over an unsupported date range (no throw)', () => {
+      expect(parseArgs(['--help', '--date-range', 'century']).help).toBe(true);
+    });
+  });
+
   describe('--color / --no-color', () => {
     test('defaults to auto', () => {
       expect(parseArgs(['nodejs']).color).toBe('auto');
@@ -437,6 +468,21 @@ describe('parseArgs', () => {
       const result = parseArgs(['nodejs'], { GOGL_TIMEOUT: 'abc' });
       expect(result.timeoutSeconds).toBe(30);
       expect(result.envWarnings.join(' ')).toMatch(/GOGL_TIMEOUT/);
+    });
+
+    test('GOGL_DATE_RANGE sets the default when no flag is given', () => {
+      expect(parseArgs(['nodejs'], { GOGL_DATE_RANGE: 'm' }).dateRange).toBe('m');
+    });
+
+    test('--date-range flag overrides GOGL_DATE_RANGE', () => {
+      const result = parseArgs(['--date-range', 'd', 'nodejs'], { GOGL_DATE_RANGE: 'm' });
+      expect(result.dateRange).toBe('d');
+    });
+
+    test('an invalid GOGL_DATE_RANGE falls back to undefined and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_DATE_RANGE: 'century' });
+      expect(result.dateRange).toBeUndefined();
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_DATE_RANGE/);
     });
   });
 

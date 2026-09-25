@@ -1,8 +1,10 @@
 export const label = 'DuckDuckGo';
 
-export function buildUrl(query, count) {
-  // The `df`/pagination params aren't needed for a single-page top-N scrape.
-  return `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+export function buildUrl(query, count, dateRange) {
+  // Pagination params aren't needed for a single-page top-N scrape; `df`
+  // (date filter) is, since it's the only supported per-query date range.
+  const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+  return dateRange ? `${url}&df=${dateRange}` : url;
 }
 
 // Runs inside the page via page.evaluate (doc defaults to the page's global

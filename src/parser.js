@@ -4,6 +4,7 @@ export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
 export const DEFAULT_MAX_RETRIES = 2;
 export const DEFAULT_TIMEOUT_SECONDS = 30;
+export const DATE_RANGES = ['d', 'w', 'm', 'y'];
 
 /**
  * Parse CLI arguments into a normalized options object.
@@ -15,11 +16,13 @@ export const DEFAULT_TIMEOUT_SECONDS = 30;
  *   engine: string, color: ('auto'|'always'|'never'), dedupe: boolean,
  *   quiet: boolean, help: boolean, version: boolean, envWarnings: string[],
  *   cache: boolean, cacheTtlSeconds: number|undefined, clearCache: boolean,
- *   maxRetries: number, timeoutSeconds: number }}
+ *   maxRetries: number, timeoutSeconds: number,
+ *   dateRange: ('d'|'w'|'m'|'y'|undefined) }}
  * @throws {Error} on unknown flags, an invalid --results/--cache-ttl/--retries/
- *   --timeout value, or an unsupported --engine value (unless --help/--version
- *   is present, which always wins). Invalid env vars never throw; they're
- *   reported via `envWarnings` and the built-in default is used instead.
+ *   --timeout/--date-range value, or an unsupported --engine value (unless
+ *   --help/--version is present, which always wins). Invalid env vars never
+ *   throw; they're reported via `envWarnings` and the built-in default is
+ *   used instead.
  */
 export function parseArgs(argv, env = process.env) {
   const envWarnings = [];
@@ -39,7 +42,8 @@ export function parseArgs(argv, env = process.env) {
     cacheTtlSeconds: undefined,
     clearCache: false,
     maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', DEFAULT_MAX_RETRIES, envWarnings),
-    timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', DEFAULT_TIMEOUT_SECONDS, envWarnings)
+    timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', DEFAULT_TIMEOUT_SECONDS, envWarnings),
+    dateRange: readEnvDateRange(env, envWarnings)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -65,6 +69,8 @@ export function parseArgs(argv, env = process.env) {
   let rawRetries = null;
   let sawTimeout = false;
   let rawTimeout = null;
+  let sawDateRange = false;
+  let rawDateRange = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -197,6 +203,22 @@ export function parseArgs(argv, env = process.env) {
       sawTimeout = true;
       continue;
     }
+    if (token === '--date-range') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--date-range requires a value');
+        continue;
+      }
+      rawDateRange = value;
+      sawDateRange = true;
+      i++; // consume the value token
+      continue;
+    }
+    if (token.startsWith('--date-range=')) {
+      rawDateRange = token.slice('--date-range='.length);
+      sawDateRange = true;
+      continue;
+    }
 
     // Any other flag-looking token is unknown. A lone '-' is treated as query.
     if (token.length > 1 && token.startsWith('-')) {
@@ -260,6 +282,14 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawDateRange) {
+    try {
+      options.dateRange = normalizeDateRange(rawDateRange);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
   if (deferredError) {
     throw deferredError;
   }
@@ -284,6 +314,13 @@ function normalizePositiveInt(raw, flagName) {
     throw new Error(`${flagName} must be a positive integer`);
   }
   return Number.parseInt(raw, 10);
+}
+
+function normalizeDateRange(raw) {
+  if (!DATE_RANGES.includes(raw)) {
+    throw new Error(`--date-range must be one of: ${DATE_RANGES.join(', ')}`);
+  }
+  return raw;
 }
 
 // Env vars only ever *seed defaults*: an invalid value is reported via
@@ -313,6 +350,19 @@ function readEnvPositiveInt(env, varName, defaultValue, envWarnings) {
   } catch {
     envWarnings.push(`Ignoring ${varName}=${raw}: must be a positive integer.`);
     return defaultValue;
+  }
+}
+
+function readEnvDateRange(env, envWarnings) {
+  const raw = env && env.GOGL_DATE_RANGE;
+  if (!raw) {
+    return undefined;
+  }
+  try {
+    return normalizeDateRange(raw);
+  } catch {
+    envWarnings.push(`Ignoring GOGL_DATE_RANGE=${raw}: must be one of ${DATE_RANGES.join(', ')}.`);
+    return undefined;
   }
 }
 

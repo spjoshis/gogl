@@ -40,6 +40,16 @@ describe('engines/google', () => {
     expect(url).toBe('https://www.google.com/search?q=rust%20async&num=5');
   });
 
+  test('buildUrl omits tbs when no dateRange is given', () => {
+    const url = buildGoogleUrl('rust async', 5);
+    expect(url).not.toContain('tbs=');
+  });
+
+  test('buildUrl appends tbs=qdr:<range> when a dateRange is given', () => {
+    const url = buildGoogleUrl('rust async', 5, 'w');
+    expect(url).toBe('https://www.google.com/search?q=rust%20async&num=5&tbs=qdr:w');
+  });
+
   test('extract pulls title/url/description and skips ads', () => {
     const organic = fakeElement({
       'h3': { innerText: 'Node.js' },
@@ -72,6 +82,15 @@ describe('engines/google', () => {
 describe('engines/duckduckgo', () => {
   test('buildUrl encodes the query', () => {
     expect(buildDdgUrl('rust async', 10)).toBe('https://html.duckduckgo.com/html/?q=rust%20async');
+  });
+
+  test('buildUrl omits df when no dateRange is given', () => {
+    expect(buildDdgUrl('rust async', 10)).not.toContain('df=');
+  });
+
+  test('buildUrl appends df=<range> when a dateRange is given', () => {
+    const url = buildDdgUrl('rust async', 10, 'w');
+    expect(url).toBe('https://html.duckduckgo.com/html/?q=rust%20async&df=w');
   });
 
   test('extract unwraps the /l/?uddg= redirect and reads the snippet', () => {

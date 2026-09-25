@@ -29,6 +29,7 @@ Options:
   -q, --quiet             Suppress the "Searching..." progress banner
   -r, --retries <n>       Retry attempts on failure (default 2)
       --timeout <secs>    Per-attempt page load timeout in seconds (default 30)
+      --date-range <r>    Restrict results by age: d/w/m/y (day/week/month/year)
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -41,6 +42,7 @@ Environment variables (used as defaults; CLI flags always win):
   GOGL_CACHE_TTL          Default --cache-ttl value in seconds
   GOGL_MAX_RETRIES        Default --retries value
   GOGL_TIMEOUT            Default --timeout value in seconds
+  GOGL_DATE_RANGE         Default --date-range value
 
 Examples:
   @google what is javascript
@@ -48,6 +50,7 @@ Examples:
   @google --engine duckduckgo nodejs streams
   @google --cache nodejs streams          # reuse a cached result if less than an hour old
   @google --cache-ttl 300 nodejs streams  # cache for 5 minutes instead
+  @google --date-range w nodejs streams   # only results from the past week
   @google --json "rust async" | jq '.[0].url'
 
 By default output is colorized only when writing to a terminal. Colors follow
@@ -122,7 +125,8 @@ async function main() {
       cache: options.cache,
       cacheTtlSeconds: options.cacheTtlSeconds,
       maxRetries: options.maxRetries,
-      timeoutMs: options.timeoutSeconds * 1000
+      timeoutMs: options.timeoutSeconds * 1000,
+      dateRange: options.dateRange
     });
     const results = options.dedupe ? dedupeResults(rawResults) : rawResults;
 

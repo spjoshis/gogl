@@ -4,13 +4,13 @@ import { DEFAULT_RESULTS } from './parser.js';
 import { DEFAULT_ENGINE, resolveEngine } from './engines/index.js';
 import { resolveCacheDir, resolveTtlMs, makeKey, readEntry, writeEntry } from './cache.js';
 
-async function searchOnce(query, count, engine, timeoutMs) {
+async function searchOnce(query, count, engine, timeoutMs, dateRange) {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await page.goto(engine.buildUrl(query, count), {
+    await page.goto(engine.buildUrl(query, count, dateRange), {
       waitUntil: 'networkidle',
       timeout: timeoutMs
     });
@@ -42,6 +42,9 @@ async function searchOnce(query, count, engine, timeoutMs) {
  * @param {number} [options.cacheTtlSeconds] - how long a cached entry stays
  *   fresh; falls back to `GOGL_CACHE_TTL` or a 1 hour default (see cache.js).
  * @param {number} [options.timeoutMs=30000] - per-attempt page load timeout.
+ * @param {string} [options.dateRange] - restrict results to a recency window:
+ *   'd' (past day), 'w' (past week), 'm' (past month), or 'y' (past year).
+ *   Omitted means no date restriction.
  */
 export async function search(query, options = {}) {
   const opts = typeof options === 'number' ? { maxRetries: options } : (options || {});
@@ -51,7 +54,8 @@ export async function search(query, options = {}) {
     engine: engineName = DEFAULT_ENGINE,
     cache = false,
     cacheTtlSeconds,
-    timeoutMs = 30000
+    timeoutMs = 30000,
+    dateRange
   } = opts;
   const engine = resolveEngine(engineName);
 
@@ -60,7 +64,7 @@ export async function search(query, options = {}) {
   }
 
   const cacheDir = cache ? resolveCacheDir() : null;
-  const cacheKey = cache ? makeKey({ engine: engineName, query, results }) : null;
+  const cacheKey = cache ? makeKey({ engine: engineName, query, results, dateRange }) : null;
 
   if (cache) {
     const ttlMs = resolveTtlMs({ flagSeconds: cacheTtlSeconds });
@@ -72,7 +76,7 @@ export async function search(query, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const data = await searchOnce(query, results, engine, timeoutMs);
+      const data = await searchOnce(query, results, engine, timeoutMs, dateRange);
       if (cache) {
         writeEntry(cacheDir, cacheKey, { engine: engineName, query, results, data });
       }
