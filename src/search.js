@@ -4,13 +4,13 @@ import { DEFAULT_RESULTS } from './parser.js';
 import { DEFAULT_ENGINE, resolveEngine } from './engines/index.js';
 import { resolveCacheDir, resolveTtlMs, makeKey, readEntry, writeEntry } from './cache.js';
 
-async function searchOnce(query, count, engine, timeoutMs, dateRange) {
+async function searchOnce(query, count, engine, timeoutMs, urlOptions) {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
     const page = await browser.newPage();
 
-    await page.goto(engine.buildUrl(query, count, dateRange), {
+    await page.goto(engine.buildUrl(query, count, urlOptions), {
       waitUntil: 'networkidle',
       timeout: timeoutMs
     });
@@ -45,6 +45,10 @@ async function searchOnce(query, count, engine, timeoutMs, dateRange) {
  * @param {string} [options.dateRange] - restrict results to a recency window:
  *   'd' (past day), 'w' (past week), 'm' (past month), or 'y' (past year).
  *   Omitted means no date restriction.
+ * @param {string} [options.region] - two-letter region/country code that biases
+ *   results (Google gl=, DuckDuckGo kl=). Omitted means the engine default.
+ * @param {('on'|'off')} [options.safe] - SafeSearch toggle. Omitted means the
+ *   engine default.
  */
 export async function search(query, options = {}) {
   const opts = typeof options === 'number' ? { maxRetries: options } : (options || {});
@@ -55,7 +59,9 @@ export async function search(query, options = {}) {
     cache = false,
     cacheTtlSeconds,
     timeoutMs = 30000,
-    dateRange
+    dateRange,
+    region,
+    safe
   } = opts;
   const engine = resolveEngine(engineName);
 
@@ -63,8 +69,12 @@ export async function search(query, options = {}) {
     return [];
   }
 
+  const urlOptions = { dateRange, region, safe };
   const cacheDir = cache ? resolveCacheDir() : null;
-  const cacheKey = cache ? makeKey({ engine: engineName, query, results, dateRange }) : null;
+  // region + safe change the result set, so they must be part of the cache key
+  // (same reasoning as dateRange); otherwise a differently-scoped search could
+  // return a stale cached hit from a different scope.
+  const cacheKey = cache ? makeKey({ engine: engineName, query, results, dateRange, region, safe }) : null;
 
   if (cache) {
     const ttlMs = resolveTtlMs({ flagSeconds: cacheTtlSeconds });
@@ -76,7 +86,7 @@ export async function search(query, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const data = await searchOnce(query, results, engine, timeoutMs, dateRange);
+      const data = await searchOnce(query, results, engine, timeoutMs, urlOptions);
       if (cache) {
         writeEntry(cacheDir, cacheKey, { engine: engineName, query, results, data });
       }

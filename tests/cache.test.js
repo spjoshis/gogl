@@ -44,6 +44,16 @@ describe('cache/makeKey', () => {
     expect(week).not.toBe(base);
     expect(day).not.toBe(week);
   });
+
+  test('differs by region and by safe, so scoped results never leak', () => {
+    const base = makeKey({ engine: 'google', query: 'nodejs', results: 10 });
+    const de = makeKey({ engine: 'google', query: 'nodejs', results: 10, region: 'de' });
+    const us = makeKey({ engine: 'google', query: 'nodejs', results: 10, region: 'us' });
+    const safeOn = makeKey({ engine: 'google', query: 'nodejs', results: 10, safe: 'on' });
+    expect(de).not.toBe(base);
+    expect(us).not.toBe(de);
+    expect(safeOn).not.toBe(base);
+  });
 });
 
 describe('cache/resolveCacheDir', () => {

@@ -71,6 +71,11 @@ npx @spjoshis/gogl "your query"
 | `--color` | Force colorized output (even when piped) |
 | `--no-color` | Disable colorized output |
 | `--no-dedupe` | Keep duplicate-URL results (deduplicated by default) |
+| `--site <domain>` | Restrict results to a domain (adds `site:<domain>` to the query) |
+| `--filetype <ext>` | Restrict results to a file type (adds `filetype:<ext>`, e.g. `pdf`) |
+| `--exclude <domain>` | Drop results from a domain; repeatable, matches subdomains |
+| `--region <code>` | Two-letter region code to localize results (Google `gl`, DuckDuckGo `kl`) |
+| `--safe <on\|off>` | Toggle SafeSearch filtering (default: engine default) |
 | `--cache` | Reuse a fresh cached result instead of searching again (see [Caching](#-caching)) |
 | `--cache-ttl <seconds>` | How long a cached result stays fresh; implies `--cache` (default 3600) |
 | `--no-cache` | Force a live search, overriding `--cache`/`--cache-ttl` |
@@ -93,6 +98,10 @@ npx @spjoshis/gogl "your query"
 @google -q nodejs | grep -i tutorial  # no banner noise mixed into piped output
 @google --retries 4 --timeout 15 nodejs  # more retries, fail faster per attempt
 @google --date-range w nodejs streams    # only results from the past week
+@google --site nodejs.org streams        # only results from nodejs.org
+@google --filetype pdf annual report     # only PDF results
+@google --exclude pinterest.com cute cats # drop pinterest.com (and subdomains)
+@google --region de --safe on rezepte     # localized, SafeSearch-filtered results
 @google --help                     # usage
 ```
 
@@ -344,7 +353,7 @@ built-in default.
 - **Location:** `$XDG_CONFIG_HOME/gogl/config.json`, or `~/.config/gogl/config.json`
   by default. Override the path entirely with `GOGL_CONFIG`.
 - **Supported keys:** `engine`, `results`, `json`, `maxRetries`, `timeoutSeconds`,
-  `dateRange` — the same values each has as a CLI flag/env var.
+  `dateRange`, `region`, `safe` — the same values each has as a CLI flag/env var.
 - **Optional and resilient:** no file is required; a missing file is a silent
   no-op. An unknown key or an invalid value for a known key is ignored with a
   warning on stderr rather than crashing the command — only that one key falls
@@ -512,9 +521,11 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_MAX_RETRIES` | Default `--retries` value | `2` |
 | `GOGL_TIMEOUT` | Default `--timeout` value in seconds | `30` |
 | `GOGL_DATE_RANGE` | Default `--date-range` value (`d`, `w`, `m`, or `y`) | unset (no restriction) |
+| `GOGL_REGION` | Default `--region` value (two-letter code) | unset (engine default) |
+| `GOGL_SAFE` | Default `--safe` value (`on`/`off`) | unset (engine default) |
 | `GOGL_CONFIG` | Path to the [config file](#-configuration-file) | `$XDG_CONFIG_HOME/gogl/config.json` or `~/.config/gogl/config.json` |
 
-An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`/`GOGL_DATE_RANGE`
+An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`/`GOGL_DATE_RANGE`/`GOGL_REGION`/`GOGL_SAFE`
 value is ignored with a warning on stderr; it never crashes the command, and the
 built-in default is used instead. See [Caching](#-caching) for how the cache env
 vars are used, and [Configuration File](#-configuration-file) for the lowest-priority

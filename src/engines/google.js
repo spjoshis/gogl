@@ -1,8 +1,30 @@
 export const label = 'Google';
 
-export function buildUrl(query, count, dateRange) {
-  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${count}`;
-  return dateRange ? `${url}&tbs=qdr:${dateRange}` : url;
+/**
+ * Build the Google search URL.
+ *
+ * @param {string} query
+ * @param {number} count
+ * @param {{ dateRange?: string, region?: string, safe?: ('on'|'off') }} [options]
+ *   dateRange -> tbs=qdr:<r>, region -> gl=<code>, safe -> safe=active|off.
+ *   Omitted options append nothing, so the default URL is unchanged.
+ * @returns {string}
+ */
+export function buildUrl(query, count, options = {}) {
+  const { dateRange, region, safe } = options;
+  let url = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${count}`;
+  if (dateRange) {
+    url += `&tbs=qdr:${dateRange}`;
+  }
+  if (region) {
+    url += `&gl=${encodeURIComponent(region)}`;
+  }
+  if (safe === 'on') {
+    url += '&safe=active';
+  } else if (safe === 'off') {
+    url += '&safe=off';
+  }
+  return url;
 }
 
 // Runs inside the page via page.evaluate (doc defaults to the page's global

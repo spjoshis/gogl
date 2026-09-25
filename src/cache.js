@@ -46,17 +46,19 @@ export function resolveTtlMs({ flagSeconds, env = process.env } = {}) {
 }
 
 /**
- * Build a stable cache key for a search. The key depends on the engine, the
- * normalized query, the requested result count, and the date range so
- * different searches never collide. The query text is hashed, so it never
- * appears in a filename.
+ * Build a stable cache key for a search. The key depends on every input that
+ * changes the result set — the engine, the normalized query, the requested
+ * result count, the date range, the region, and the SafeSearch setting — so
+ * differently-scoped searches never collide. The query text is hashed, so it
+ * never appears in a filename.
  *
- * @param {{ engine: string, query: string, results: number, dateRange?: string }} params
+ * @param {{ engine: string, query: string, results: number, dateRange?: string,
+ *   region?: string, safe?: string }} params
  * @returns {string} 32-char hex key
  */
-export function makeKey({ engine, query, results, dateRange }) {
+export function makeKey({ engine, query, results, dateRange, region, safe }) {
   const normQuery = String(query ?? '').trim().replace(/\s+/g, ' ');
-  const material = `${engine}\n${normQuery}\n${results}\n${dateRange || ''}`;
+  const material = `${engine}\n${normQuery}\n${results}\n${dateRange || ''}\n${region || ''}\n${safe || ''}`;
   return createHash('sha256').update(material).digest('hex').slice(0, 32);
 }
 
