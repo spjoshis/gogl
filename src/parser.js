@@ -1,4 +1,5 @@
 import { DEFAULT_ENGINE, ENGINE_NAMES, resolveEngine } from './engines/index.js';
+import { loadConfigFile } from './config.js';
 
 export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
@@ -11,7 +12,7 @@ export const DATE_RANGES = ['d', 'w', 'm', 'y'];
  *
  * @param {string[]} argv - argument vector (already sliced past node/script)
  * @param {NodeJS.ProcessEnv} [env=process.env] - environment used to seed
- *   defaults (GOGL_ENGINE, GOGL_RESULTS, GOGL_JSON); CLI flags always win.
+ *   defaults (GOGL_ENGINE, GOGL_RESULTS, GOGL_JSON, ...); CLI flags always win.
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
  *   engine: string, color: ('auto'|'always'|'never'), dedupe: boolean,
  *   quiet: boolean, help: boolean, version: boolean, envWarnings: string[],
@@ -20,18 +21,24 @@ export const DATE_RANGES = ['d', 'w', 'm', 'y'];
  *   dateRange: ('d'|'w'|'m'|'y'|undefined) }}
  * @throws {Error} on unknown flags, an invalid --results/--cache-ttl/--retries/
  *   --timeout/--date-range value, or an unsupported --engine value (unless
- *   --help/--version is present, which always wins). Invalid env vars never
- *   throw; they're reported via `envWarnings` and the built-in default is
- *   used instead.
+ *   --help/--version is present, which always wins). Invalid env vars and
+ *   config file values never throw; they're reported via `envWarnings` and
+ *   the next default in the precedence chain (CLI flag > env var > config
+ *   file > built-in default) is used instead.
  */
 export function parseArgs(argv, env = process.env) {
   const envWarnings = [];
+  const skipConfigFile = Array.isArray(argv) && argv.includes('--no-config');
+  const configFile = skipConfigFile ? { values: {}, warnings: [] } : loadConfigFile(env);
+  configFile.warnings.forEach((warning) => envWarnings.push(warning));
+  const configDefaults = resolveConfigDefaults(configFile.values, envWarnings);
+
   const options = {
     query: '',
-    json: readEnvJson(env, envWarnings),
-    results: DEFAULT_RESULTS,
-    clamped: false,
-    engine: readEnvEngine(env, envWarnings),
+    json: readEnvJson(env, envWarnings, configDefaults.json),
+    results: configDefaults.results,
+    clamped: configDefaults.resultsClamped,
+    engine: readEnvEngine(env, envWarnings, configDefaults.engine),
     color: 'auto',
     dedupe: true,
     quiet: false,
@@ -41,9 +48,9 @@ export function parseArgs(argv, env = process.env) {
     cache: false,
     cacheTtlSeconds: undefined,
     clearCache: false,
-    maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', DEFAULT_MAX_RETRIES, envWarnings),
-    timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', DEFAULT_TIMEOUT_SECONDS, envWarnings),
-    dateRange: readEnvDateRange(env, envWarnings)
+    maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', configDefaults.maxRetries, envWarnings),
+    timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', configDefaults.timeoutSeconds, envWarnings),
+    dateRange: readEnvDateRange(env, envWarnings, configDefaults.dateRange)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -153,6 +160,11 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '--clear-cache') {
       options.clearCache = true;
+      continue;
+    }
+    if (token === '--no-config') {
+      // Already applied above (config file must be skipped before defaults
+      // are computed); recognized here so it isn't flagged as unknown.
       continue;
     }
     if (token === '--cache-ttl') {
@@ -325,44 +337,47 @@ function normalizeDateRange(raw) {
 
 // Env vars only ever *seed defaults*: an invalid value is reported via
 // `envWarnings` and ignored rather than raised, so a stale/bad value in the
-// user's shell profile never breaks every single invocation of the CLI.
-function readEnvEngine(env, envWarnings) {
+// user's shell profile never breaks every single invocation of the CLI. Each
+// reader falls back to `fallback` (the config-file value, or ultimately the
+// built-in constant) rather than a hardcoded default, so the precedence
+// chain is CLI flag > env var > config file > built-in default.
+function readEnvEngine(env, envWarnings, fallback = DEFAULT_ENGINE) {
   const raw = env && env.GOGL_ENGINE;
   if (!raw) {
-    return DEFAULT_ENGINE;
+    return fallback;
   }
   try {
     resolveEngine(raw);
     return raw;
   } catch {
     envWarnings.push(`Ignoring GOGL_ENGINE=${raw}: unknown engine. Supported: ${ENGINE_NAMES.join(', ')}.`);
-    return DEFAULT_ENGINE;
+    return fallback;
   }
 }
 
-function readEnvPositiveInt(env, varName, defaultValue, envWarnings) {
+function readEnvPositiveInt(env, varName, fallback, envWarnings) {
   const raw = env && env[varName];
   if (!raw) {
-    return defaultValue;
+    return fallback;
   }
   try {
     return normalizePositiveInt(raw, varName);
   } catch {
     envWarnings.push(`Ignoring ${varName}=${raw}: must be a positive integer.`);
-    return defaultValue;
+    return fallback;
   }
 }
 
-function readEnvDateRange(env, envWarnings) {
+function readEnvDateRange(env, envWarnings, fallback = undefined) {
   const raw = env && env.GOGL_DATE_RANGE;
   if (!raw) {
-    return undefined;
+    return fallback;
   }
   try {
     return normalizeDateRange(raw);
   } catch {
     envWarnings.push(`Ignoring GOGL_DATE_RANGE=${raw}: must be one of ${DATE_RANGES.join(', ')}.`);
-    return undefined;
+    return fallback;
   }
 }
 
@@ -382,10 +397,10 @@ function readEnvResults(env, envWarnings) {
 const TRUTHY_ENV = new Set(['1', 'true', 'yes']);
 const FALSY_ENV = new Set(['0', 'false', 'no']);
 
-function readEnvJson(env, envWarnings) {
+function readEnvJson(env, envWarnings, fallback = false) {
   const raw = env && env.GOGL_JSON;
   if (raw === undefined || raw === '') {
-    return false;
+    return fallback;
   }
   const normalized = raw.toLowerCase();
   if (TRUTHY_ENV.has(normalized)) {
@@ -395,5 +410,82 @@ function readEnvJson(env, envWarnings) {
     return false;
   }
   envWarnings.push(`Ignoring GOGL_JSON=${raw}: expected true/false, 1/0, or yes/no.`);
-  return false;
+  return fallback;
+}
+
+/**
+ * Validate the raw config-file values against the same rules the CLI flags
+ * and env vars use, returning a fully-populated defaults object (built-in
+ * constants for anything absent or invalid). Invalid individual keys are
+ * reported via `warnings` and ignored independently, same as env vars.
+ *
+ * @param {object} configValues - raw values already limited to known keys
+ * @param {string[]} warnings
+ * @returns {{ engine: string, results: number, resultsClamped: boolean,
+ *   json: boolean, maxRetries: number, timeoutSeconds: number,
+ *   dateRange: (string|undefined) }}
+ */
+function resolveConfigDefaults(configValues, warnings) {
+  const defaults = {
+    engine: DEFAULT_ENGINE,
+    results: DEFAULT_RESULTS,
+    resultsClamped: false,
+    json: false,
+    maxRetries: DEFAULT_MAX_RETRIES,
+    timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
+    dateRange: undefined
+  };
+
+  if ('engine' in configValues) {
+    try {
+      resolveEngine(configValues.engine);
+      defaults.engine = configValues.engine;
+    } catch {
+      warnings.push(`Ignoring config "engine": unknown engine. Supported: ${ENGINE_NAMES.join(', ')}.`);
+    }
+  }
+
+  if ('results' in configValues) {
+    try {
+      const { value, clamped } = normalizeResults(String(configValues.results));
+      defaults.results = value;
+      defaults.resultsClamped = clamped;
+    } catch {
+      warnings.push('Ignoring config "results": must be a positive integer.');
+    }
+  }
+
+  if ('json' in configValues) {
+    if (typeof configValues.json === 'boolean') {
+      defaults.json = configValues.json;
+    } else {
+      warnings.push('Ignoring config "json": must be true or false.');
+    }
+  }
+
+  if ('maxRetries' in configValues) {
+    try {
+      defaults.maxRetries = normalizePositiveInt(String(configValues.maxRetries), 'maxRetries');
+    } catch {
+      warnings.push('Ignoring config "maxRetries": must be a positive integer.');
+    }
+  }
+
+  if ('timeoutSeconds' in configValues) {
+    try {
+      defaults.timeoutSeconds = normalizePositiveInt(String(configValues.timeoutSeconds), 'timeoutSeconds');
+    } catch {
+      warnings.push('Ignoring config "timeoutSeconds": must be a positive integer.');
+    }
+  }
+
+  if ('dateRange' in configValues) {
+    try {
+      defaults.dateRange = normalizeDateRange(configValues.dateRange);
+    } catch {
+      warnings.push(`Ignoring config "dateRange": must be one of: ${DATE_RANGES.join(', ')}.`);
+    }
+  }
+
+  return defaults;
 }

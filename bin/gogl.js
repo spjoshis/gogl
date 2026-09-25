@@ -30,9 +30,16 @@ Options:
   -r, --retries <n>       Retry attempts on failure (default 2)
       --timeout <secs>    Per-attempt page load timeout in seconds (default 30)
       --date-range <r>    Restrict results by age: d/w/m/y (day/week/month/year)
+      --no-config         Skip the config file for this run
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
+
+Config file (optional; lower precedence than env vars and flags):
+  $XDG_CONFIG_HOME/gogl/config.json, or ~/.config/gogl/config.json.
+  Override the path with GOGL_CONFIG. A JSON object with any of: engine,
+  results, json, maxRetries, timeoutSeconds, dateRange. Unknown keys and
+  invalid values are ignored with a warning, never a crash.
 
 Environment variables (used as defaults; CLI flags always win):
   GOGL_ENGINE             Default --engine value
@@ -43,6 +50,7 @@ Environment variables (used as defaults; CLI flags always win):
   GOGL_MAX_RETRIES        Default --retries value
   GOGL_TIMEOUT            Default --timeout value in seconds
   GOGL_DATE_RANGE         Default --date-range value
+  GOGL_CONFIG             Path to the config file (see above)
 
 Examples:
   @google what is javascript
@@ -51,6 +59,7 @@ Examples:
   @google --cache nodejs streams          # reuse a cached result if less than an hour old
   @google --cache-ttl 300 nodejs streams  # cache for 5 minutes instead
   @google --date-range w nodejs streams   # only results from the past week
+  @google --no-config nodejs streams      # ignore your config file for this run
   @google --json "rust async" | jq '.[0].url'
 
 By default output is colorized only when writing to a terminal. Colors follow

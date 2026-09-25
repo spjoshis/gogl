@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { readFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdtempSync, rmSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import os from 'node:os';
 import path from 'node:path';
@@ -123,6 +123,43 @@ describe('CLI (non-network paths)', () => {
     const { status, stderr } = runCli(['--help'], { GOGL_DATE_RANGE: 'century' });
     expect(status).toBe(0);
     expect(stderr).toMatch(/GOGL_DATE_RANGE/);
+  });
+
+  test('--help documents the config file and --no-config', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('Config file');
+    expect(stdout).toContain('--no-config');
+    expect(stdout).toContain('GOGL_CONFIG');
+  });
+});
+
+describe('CLI config file (non-network, real filesystem)', () => {
+  let dir;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-cli-config-'));
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('an invalid config value warns but --help still wins', () => {
+    const file = path.join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify({ engine: 'bing' }));
+
+    const { status, stderr } = runCli(['--help'], { GOGL_CONFIG: file });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/config "engine"/);
+  });
+
+  test('--no-config suppresses config file warnings', () => {
+    const file = path.join(dir, 'config.json');
+    writeFileSync(file, JSON.stringify({ engine: 'bing' }));
+
+    const { status, stderr } = runCli(['--no-config', '--help'], { GOGL_CONFIG: file });
+    expect(status).toBe(0);
+    expect(stderr).not.toMatch(/config "engine"/);
   });
 });
 

@@ -1,4 +1,15 @@
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
 import { parseArgs } from '../src/parser.js';
+
+function tmpConfigFile(contents) {
+  const dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-parser-config-test-'));
+  const file = path.join(dir, 'config.json');
+  writeFileSync(file, JSON.stringify(contents));
+  return { dir, file };
+}
 
 describe('parseArgs', () => {
   test('should parse single word query', () => {
@@ -483,6 +494,75 @@ describe('parseArgs', () => {
       const result = parseArgs(['nodejs'], { GOGL_DATE_RANGE: 'century' });
       expect(result.dateRange).toBeUndefined();
       expect(result.envWarnings.join(' ')).toMatch(/GOGL_DATE_RANGE/);
+    });
+  });
+
+  describe('config file defaults', () => {
+    let dir;
+
+    afterEach(() => {
+      if (dir) {
+        rmSync(dir, { recursive: true, force: true });
+        dir = undefined;
+      }
+    });
+
+    test('sets defaults from the config file when nothing else overrides them', () => {
+      const created = tmpConfigFile({ engine: 'duckduckgo', results: 5, dateRange: 'w' });
+      dir = created.dir;
+      const result = parseArgs(['nodejs'], { GOGL_CONFIG: created.file });
+      expect(result.engine).toBe('duckduckgo');
+      expect(result.results).toBe(5);
+      expect(result.dateRange).toBe('w');
+    });
+
+    test('an env var overrides a config file value', () => {
+      const created = tmpConfigFile({ engine: 'duckduckgo' });
+      dir = created.dir;
+      const result = parseArgs(['nodejs'], { GOGL_CONFIG: created.file, GOGL_ENGINE: 'google' });
+      expect(result.engine).toBe('google');
+    });
+
+    test('a CLI flag overrides both a config file and an env var', () => {
+      const created = tmpConfigFile({ engine: 'duckduckgo' });
+      dir = created.dir;
+      const result = parseArgs(
+        ['--engine', 'google', 'nodejs'],
+        { GOGL_CONFIG: created.file, GOGL_ENGINE: 'duckduckgo' }
+      );
+      expect(result.engine).toBe('google');
+    });
+
+    test('an invalid config value falls back to the built-in default and warns', () => {
+      const created = tmpConfigFile({ engine: 'bing' });
+      dir = created.dir;
+      const result = parseArgs(['nodejs'], { GOGL_CONFIG: created.file });
+      expect(result.engine).toBe('google');
+      expect(result.envWarnings.join(' ')).toMatch(/config "engine"/);
+    });
+
+    test('an unknown config key warns but does not throw', () => {
+      const created = tmpConfigFile({ bogus: true });
+      dir = created.dir;
+      const result = parseArgs(['nodejs'], { GOGL_CONFIG: created.file });
+      expect(result.query).toBe('nodejs');
+      expect(result.envWarnings.join(' ')).toMatch(/unknown config key "bogus"/);
+    });
+
+    test('--no-config skips the config file entirely', () => {
+      const created = tmpConfigFile({ engine: 'duckduckgo', results: 5 });
+      dir = created.dir;
+      const result = parseArgs(['--no-config', 'nodejs'], { GOGL_CONFIG: created.file });
+      expect(result.engine).toBe('google');
+      expect(result.results).toBe(10);
+      expect(result.envWarnings).toEqual([]);
+    });
+
+    test('--no-config does not disable env vars or flags', () => {
+      const created = tmpConfigFile({ engine: 'duckduckgo' });
+      dir = created.dir;
+      const result = parseArgs(['--no-config', 'nodejs'], { GOGL_CONFIG: created.file, GOGL_RESULTS: '7' });
+      expect(result.results).toBe(7);
     });
   });
 
