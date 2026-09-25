@@ -27,6 +27,8 @@ Options:
       --no-cache           Force a live search, overriding --cache/--cache-ttl
       --clear-cache        Delete all cached results and exit
   -q, --quiet             Suppress the "Searching..." progress banner
+  -r, --retries <n>       Retry attempts on failure (default 2)
+      --timeout <secs>    Per-attempt page load timeout in seconds (default 30)
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -37,6 +39,8 @@ Environment variables (used as defaults; CLI flags always win):
   GOGL_JSON               Default --json value (true/false, 1/0, yes/no)
   GOGL_CACHE_DIR          Directory used to store cached results
   GOGL_CACHE_TTL          Default --cache-ttl value in seconds
+  GOGL_MAX_RETRIES        Default --retries value
+  GOGL_TIMEOUT            Default --timeout value in seconds
 
 Examples:
   @google what is javascript
@@ -116,7 +120,9 @@ async function main() {
       results: options.results,
       engine: options.engine,
       cache: options.cache,
-      cacheTtlSeconds: options.cacheTtlSeconds
+      cacheTtlSeconds: options.cacheTtlSeconds,
+      maxRetries: options.maxRetries,
+      timeoutMs: options.timeoutSeconds * 1000
     });
     const results = options.dedupe ? dedupeResults(rawResults) : rawResults;
 

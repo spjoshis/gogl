@@ -352,6 +352,94 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--retries / -r', () => {
+    test('defaults to 2 retries', () => {
+      expect(parseArgs(['nodejs']).maxRetries).toBe(2);
+    });
+
+    test('--retries N sets the retry count', () => {
+      expect(parseArgs(['--retries', '5', 'nodejs']).maxRetries).toBe(5);
+    });
+
+    test('-r N shorthand works', () => {
+      expect(parseArgs(['-r', '1', 'nodejs']).maxRetries).toBe(1);
+    });
+
+    test('--retries=N form works', () => {
+      expect(parseArgs(['--retries=4', 'nodejs']).maxRetries).toBe(4);
+    });
+
+    test('throws for a non-numeric --retries', () => {
+      expect(() => parseArgs(['--retries', 'abc', 'nodejs'])).toThrow(/positive integer/);
+    });
+
+    test('throws for a zero --retries', () => {
+      expect(() => parseArgs(['--retries', '0', 'nodejs'])).toThrow(/positive integer/);
+    });
+
+    test('throws when --retries has no value', () => {
+      expect(() => parseArgs(['nodejs', '--retries'])).toThrow(/--retries requires a value/);
+    });
+
+    test('--help wins over an invalid --retries (no throw)', () => {
+      expect(parseArgs(['--help', '--retries', 'abc']).help).toBe(true);
+    });
+
+    test('GOGL_MAX_RETRIES sets the default when no flag is given', () => {
+      expect(parseArgs(['nodejs'], { GOGL_MAX_RETRIES: '5' }).maxRetries).toBe(5);
+    });
+
+    test('--retries flag overrides GOGL_MAX_RETRIES', () => {
+      expect(parseArgs(['--retries', '3', 'nodejs'], { GOGL_MAX_RETRIES: '5' }).maxRetries).toBe(3);
+    });
+
+    test('an invalid GOGL_MAX_RETRIES falls back to the default and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_MAX_RETRIES: 'abc' });
+      expect(result.maxRetries).toBe(2);
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_MAX_RETRIES/);
+    });
+  });
+
+  describe('--timeout', () => {
+    test('defaults to 30 seconds', () => {
+      expect(parseArgs(['nodejs']).timeoutSeconds).toBe(30);
+    });
+
+    test('--timeout N sets the timeout in seconds', () => {
+      expect(parseArgs(['--timeout', '10', 'nodejs']).timeoutSeconds).toBe(10);
+    });
+
+    test('--timeout=N form works', () => {
+      expect(parseArgs(['--timeout=15', 'nodejs']).timeoutSeconds).toBe(15);
+    });
+
+    test('throws for a non-numeric --timeout', () => {
+      expect(() => parseArgs(['--timeout', 'abc', 'nodejs'])).toThrow(/positive integer/);
+    });
+
+    test('throws when --timeout has no value', () => {
+      expect(() => parseArgs(['nodejs', '--timeout'])).toThrow(/--timeout requires a value/);
+    });
+
+    test('--help wins over an invalid --timeout (no throw)', () => {
+      expect(parseArgs(['--help', '--timeout', 'abc']).help).toBe(true);
+    });
+
+    test('GOGL_TIMEOUT sets the default when no flag is given', () => {
+      expect(parseArgs(['nodejs'], { GOGL_TIMEOUT: '45' }).timeoutSeconds).toBe(45);
+    });
+
+    test('--timeout flag overrides GOGL_TIMEOUT', () => {
+      expect(parseArgs(['--timeout', '20', 'nodejs'], { GOGL_TIMEOUT: '45' }).timeoutSeconds).toBe(20);
+    });
+
+    test('an invalid GOGL_TIMEOUT falls back to the default and warns', () => {
+      const result = parseArgs(['nodejs'], { GOGL_TIMEOUT: 'abc' });
+      expect(result.timeoutSeconds).toBe(30);
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_TIMEOUT/);
+    });
+  });
+
   describe('-- separator', () => {
     test('should treat tokens after -- as literal query', () => {
       const result = parseArgs(['--', '--json']);

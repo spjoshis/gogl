@@ -4,7 +4,7 @@ import { DEFAULT_RESULTS } from './parser.js';
 import { DEFAULT_ENGINE, resolveEngine } from './engines/index.js';
 import { resolveCacheDir, resolveTtlMs, makeKey, readEntry, writeEntry } from './cache.js';
 
-async function searchOnce(query, count, engine) {
+async function searchOnce(query, count, engine, timeoutMs) {
   let browser;
   try {
     browser = await chromium.launch({ headless: true });
@@ -12,7 +12,7 @@ async function searchOnce(query, count, engine) {
 
     await page.goto(engine.buildUrl(query, count), {
       waitUntil: 'networkidle',
-      timeout: 30000
+      timeout: timeoutMs
     });
 
     const results = await page.evaluate(engine.extract, count);
@@ -41,6 +41,7 @@ async function searchOnce(query, count, engine) {
  *   by default so results are always live unless explicitly opted in.
  * @param {number} [options.cacheTtlSeconds] - how long a cached entry stays
  *   fresh; falls back to `GOGL_CACHE_TTL` or a 1 hour default (see cache.js).
+ * @param {number} [options.timeoutMs=30000] - per-attempt page load timeout.
  */
 export async function search(query, options = {}) {
   const opts = typeof options === 'number' ? { maxRetries: options } : (options || {});
@@ -49,7 +50,8 @@ export async function search(query, options = {}) {
     results = DEFAULT_RESULTS,
     engine: engineName = DEFAULT_ENGINE,
     cache = false,
-    cacheTtlSeconds
+    cacheTtlSeconds,
+    timeoutMs = 30000
   } = opts;
   const engine = resolveEngine(engineName);
 
@@ -70,7 +72,7 @@ export async function search(query, options = {}) {
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const data = await searchOnce(query, results, engine);
+      const data = await searchOnce(query, results, engine, timeoutMs);
       if (cache) {
         writeEntry(cacheDir, cacheKey, { engine: engineName, query, results, data });
       }

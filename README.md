@@ -76,6 +76,8 @@ npx @spjoshis/gogl "your query"
 | `--no-cache` | Force a live search, overriding `--cache`/`--cache-ttl` |
 | `--clear-cache` | Delete all cached results and exit |
 | `-q, --quiet` | Suppress the "Searching..." progress banner |
+| `-r, --retries <n>` | Retry attempts on failure (default 2) |
+| `--timeout <seconds>` | Per-attempt page load timeout (default 30) |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -87,6 +89,7 @@ npx @spjoshis/gogl "your query"
 @google --no-color nodejs          # plain output, no ANSI colors
 @google --cache nodejs streams     # reuse a cached result if less than an hour old
 @google -q nodejs | grep -i tutorial  # no banner noise mixed into piped output
+@google --retries 4 --timeout 15 nodejs  # more retries, fail faster per attempt
 @google --help                     # usage
 ```
 
@@ -475,10 +478,13 @@ CLI flag always overrides the matching environment variable.
 | `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
 | `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
 | `GOGL_CACHE_TTL` | Default cache TTL in seconds (a `--cache-ttl` flag wins over this) | `3600` (1 hour) |
+| `GOGL_MAX_RETRIES` | Default `--retries` value | `2` |
+| `GOGL_TIMEOUT` | Default `--timeout` value in seconds | `30` |
 
-An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON` value is ignored with
-a warning on stderr; it never crashes the command, and the built-in default
-is used instead. See [Caching](#-caching) for how the cache env vars are used.
+An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`
+value is ignored with a warning on stderr; it never crashes the command, and the
+built-in default is used instead. See [Caching](#-caching) for how the cache env
+vars are used.
 
 ```bash
 export GOGL_ENGINE=duckduckgo
