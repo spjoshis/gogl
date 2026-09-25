@@ -1,7 +1,8 @@
 export const label = 'Google';
 
-export function buildUrl(query, count) {
-  return `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${count}`;
+export function buildUrl(query, count, dateRange) {
+  const url = `https://www.google.com/search?q=${encodeURIComponent(query)}&num=${count}`;
+  return dateRange ? `${url}&tbs=qdr:${dateRange}` : url;
 }
 
 // Runs inside the page via page.evaluate (doc defaults to the page's global

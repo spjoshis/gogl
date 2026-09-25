@@ -35,6 +35,15 @@ describe('cache/makeKey', () => {
     expect(makeKey({ engine: 'duckduckgo', query: 'nodejs', results: 10 })).not.toBe(base);
     expect(makeKey({ engine: 'google', query: 'nodejs', results: 5 })).not.toBe(base);
   });
+
+  test('differs by date range, so a cached entry never leaks across ranges', () => {
+    const base = makeKey({ engine: 'google', query: 'nodejs', results: 10 });
+    const day = makeKey({ engine: 'google', query: 'nodejs', results: 10, dateRange: 'd' });
+    const week = makeKey({ engine: 'google', query: 'nodejs', results: 10, dateRange: 'w' });
+    expect(day).not.toBe(base);
+    expect(week).not.toBe(base);
+    expect(day).not.toBe(week);
+  });
 });
 
 describe('cache/resolveCacheDir', () => {

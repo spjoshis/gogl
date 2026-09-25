@@ -106,6 +106,24 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(0);
     expect(stderr).toMatch(/GOGL_MAX_RETRIES/);
   });
+
+  test('--help documents --date-range', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--date-range');
+    expect(stdout).toContain('GOGL_DATE_RANGE');
+  });
+
+  test('invalid --date-range exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--date-range', 'century', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--date-range must be one of/);
+  });
+
+  test('an invalid GOGL_DATE_RANGE prints a warning but --help still wins', () => {
+    const { status, stderr } = runCli(['--help'], { GOGL_DATE_RANGE: 'century' });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/GOGL_DATE_RANGE/);
+  });
 });
 
 describe('CLI --clear-cache (non-network, real filesystem)', () => {

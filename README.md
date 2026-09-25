@@ -78,6 +78,7 @@ npx @spjoshis/gogl "your query"
 | `-q, --quiet` | Suppress the "Searching..." progress banner |
 | `-r, --retries <n>` | Retry attempts on failure (default 2) |
 | `--timeout <seconds>` | Per-attempt page load timeout (default 30) |
+| `--date-range <d\|w\|m\|y>` | Restrict results to the past day/week/month/year (default: no restriction) |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -90,6 +91,7 @@ npx @spjoshis/gogl "your query"
 @google --cache nodejs streams     # reuse a cached result if less than an hour old
 @google -q nodejs | grep -i tutorial  # no banner noise mixed into piped output
 @google --retries 4 --timeout 15 nodejs  # more retries, fail faster per attempt
+@google --date-range w nodejs streams    # only results from the past week
 @google --help                     # usage
 ```
 
@@ -480,8 +482,9 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_CACHE_TTL` | Default cache TTL in seconds (a `--cache-ttl` flag wins over this) | `3600` (1 hour) |
 | `GOGL_MAX_RETRIES` | Default `--retries` value | `2` |
 | `GOGL_TIMEOUT` | Default `--timeout` value in seconds | `30` |
+| `GOGL_DATE_RANGE` | Default `--date-range` value (`d`, `w`, `m`, or `y`) | unset (no restriction) |
 
-An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`
+An unrecognized `GOGL_ENGINE`/`GOGL_RESULTS`/`GOGL_JSON`/`GOGL_MAX_RETRIES`/`GOGL_TIMEOUT`/`GOGL_DATE_RANGE`
 value is ignored with a warning on stderr; it never crashes the command, and the
 built-in default is used instead. See [Caching](#-caching) for how the cache env
 vars are used.
@@ -626,9 +629,9 @@ When I search for "nodejs", the command times out.
 Planned features and improvements:
 
 - [x] JSON output format option
-- [ ] Filter results by date
+- [x] Filter results by date
 - [x] Custom number of results
-- [ ] Result caching
+- [x] Result caching
 - [x] Multiple search engine support (Google, DuckDuckGo)
 - [x] Colorized terminal output
 - [ ] Rich table/box formatting
