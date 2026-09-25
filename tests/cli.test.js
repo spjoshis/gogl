@@ -71,6 +71,30 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(1);
     expect(stderr).toMatch(/positive integer/i);
   });
+
+  test('invalid --retries exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--retries', 'abc', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/positive integer/i);
+  });
+
+  test('invalid --timeout exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--timeout', 'abc', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/positive integer/i);
+  });
+
+  test('--help documents --retries and --timeout', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--retries');
+    expect(stdout).toContain('--timeout');
+  });
+
+  test('an invalid GOGL_MAX_RETRIES prints a warning but --help still wins', () => {
+    const { status, stderr } = runCli(['--help'], { GOGL_MAX_RETRIES: 'abc' });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/GOGL_MAX_RETRIES/);
+  });
 });
 
 describe('CLI --clear-cache (non-network, real filesystem)', () => {
