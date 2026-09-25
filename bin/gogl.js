@@ -26,6 +26,7 @@ Options:
       --cache-ttl <secs>   How long a cached result stays fresh (implies --cache; default ${DEFAULT_TTL_SECONDS})
       --no-cache           Force a live search, overriding --cache/--cache-ttl
       --clear-cache        Delete all cached results and exit
+  -q, --quiet             Suppress the "Searching..." progress banner
   -r, --retries <n>       Retry attempts on failure (default 2)
       --timeout <secs>    Per-attempt page load timeout in seconds (default 30)
   -h, --help              Show this help and exit
@@ -105,11 +106,14 @@ async function main() {
     const engineLabel = resolveEngine(options.engine).label;
 
     // Keep stdout clean for JSON so it can be piped; progress goes to stderr.
-    const banner = `\nSearching ${engineLabel} for: "${options.query}"\n`;
-    if (options.json) {
-      console.error(banner);
-    } else {
-      console.log(banner);
+    // --quiet suppresses it entirely, which also helps piping non-JSON output.
+    if (!options.quiet) {
+      const banner = `\nSearching ${engineLabel} for: "${options.query}"\n`;
+      if (options.json) {
+        console.error(banner);
+      } else {
+        console.log(banner);
+      }
     }
 
     const rawResults = await search(options.query, {

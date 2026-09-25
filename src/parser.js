@@ -13,9 +13,9 @@ export const DEFAULT_TIMEOUT_SECONDS = 30;
  *   defaults (GOGL_ENGINE, GOGL_RESULTS, GOGL_JSON); CLI flags always win.
  * @returns {{ query: string, json: boolean, results: number, clamped: boolean,
  *   engine: string, color: ('auto'|'always'|'never'), dedupe: boolean,
- *   help: boolean, version: boolean, envWarnings: string[], cache: boolean,
- *   cacheTtlSeconds: number|undefined, clearCache: boolean, maxRetries: number,
- *   timeoutSeconds: number }}
+ *   quiet: boolean, help: boolean, version: boolean, envWarnings: string[],
+ *   cache: boolean, cacheTtlSeconds: number|undefined, clearCache: boolean,
+ *   maxRetries: number, timeoutSeconds: number }}
  * @throws {Error} on unknown flags, an invalid --results/--cache-ttl/--retries/
  *   --timeout value, or an unsupported --engine value (unless --help/--version
  *   is present, which always wins). Invalid env vars never throw; they're
@@ -31,6 +31,7 @@ export function parseArgs(argv, env = process.env) {
     engine: readEnvEngine(env, envWarnings),
     color: 'auto',
     dedupe: true,
+    quiet: false,
     help: false,
     version: false,
     envWarnings,
@@ -98,6 +99,10 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '--no-dedupe' || token === '--no-dedup') {
       options.dedupe = false;
+      continue;
+    }
+    if (token === '-q' || token === '--quiet') {
+      options.quiet = true;
       continue;
     }
     if (token === '-n' || token === '--results') {
