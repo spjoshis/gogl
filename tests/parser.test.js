@@ -771,4 +771,71 @@ describe('parseArgs', () => {
       expect(parseArgs(['x'], { GOGL_DESC_LENGTH: '120' }).descLength).toBe(120);
     });
   });
+
+  describe('--open', () => {
+    test('bare --open defaults to result #1', () => {
+      const result = parseArgs(['--open', 'nodejs']);
+      expect(result.openIndex).toBe(1);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('consumes a numeric argument as the index', () => {
+      const result = parseArgs(['--open', '3', 'nodejs']);
+      expect(result.openIndex).toBe(3);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('the = form works', () => {
+      expect(parseArgs(['--open=2', 'nodejs']).openIndex).toBe(2);
+    });
+
+    test('does not consume a non-numeric next token', () => {
+      const result = parseArgs(['--open', 'streams']);
+      expect(result.openIndex).toBe(1);
+      expect(result.query).toBe('streams');
+    });
+
+    test('rejects a non-positive index', () => {
+      expect(() => parseArgs(['--open=0', 'x'])).toThrow(/--open must be a positive integer/);
+    });
+
+    test('is undefined when not requested', () => {
+      expect(parseArgs(['x']).openIndex).toBeUndefined();
+    });
+  });
+
+  describe('--history / --no-history', () => {
+    test('--history sets the list action', () => {
+      expect(parseArgs(['--history']).historyAction).toBe('list');
+    });
+
+    test('--history clear sets the clear action', () => {
+      expect(parseArgs(['--history', 'clear']).historyAction).toBe('clear');
+    });
+
+    test('--history=clear works', () => {
+      expect(parseArgs(['--history=clear']).historyAction).toBe('clear');
+    });
+
+    test('history recording is on by default', () => {
+      expect(parseArgs(['x']).history).toBe(true);
+    });
+
+    test('--no-history disables recording', () => {
+      expect(parseArgs(['--no-history', 'x']).history).toBe(false);
+    });
+
+    test('GOGL_HISTORY=0 disables recording', () => {
+      expect(parseArgs(['x'], { GOGL_HISTORY: '0' }).history).toBe(false);
+    });
+
+    test('config history:false disables recording', () => {
+      const { dir, file } = tmpConfigFile({ history: false });
+      try {
+        expect(parseArgs(['x'], { GOGL_CONFIG: file }).history).toBe(false);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
 });
