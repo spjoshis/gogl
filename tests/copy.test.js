@@ -1,3 +1,5 @@
+import path from 'node:path';
+
 import { resolveCopyCommand, copyToClipboard, commandExists } from '../src/copy.js';
 
 describe('copy/resolveCopyCommand', () => {
@@ -30,9 +32,15 @@ describe('copy/resolveCopyCommand', () => {
 
 describe('copy/commandExists', () => {
   test('finds a command on the PATH', () => {
-    const fakeFs = { existsSync: (p) => p === '/bin/pbcopy' };
-    expect(commandExists('pbcopy', { PATH: '/usr/bin:/bin' }, fakeFs)).toBe(true);
-    expect(commandExists('nope', { PATH: '/usr/bin:/bin' }, fakeFs)).toBe(false);
+    // Build paths with the platform's own separator/delimiter so this passes on
+    // Windows too (where path.delimiter is ';' and path.join uses '\\').
+    const dir1 = path.join(path.sep, 'usr', 'bin');
+    const dir2 = path.join(path.sep, 'bin');
+    const target = path.join(dir2, 'pbcopy');
+    const fakeFs = { existsSync: (p) => p === target };
+    const PATH = [dir1, dir2].join(path.delimiter);
+    expect(commandExists('pbcopy', { PATH }, fakeFs)).toBe(true);
+    expect(commandExists('nope', { PATH }, fakeFs)).toBe(false);
   });
 
   test('returns false with an empty PATH', () => {
