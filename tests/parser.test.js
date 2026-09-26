@@ -838,6 +838,29 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('config actions (--init-config / --show-config / --force)', () => {
+    test('flags default to false', () => {
+      const result = parseArgs(['x']);
+      expect(result.initConfig).toBe(false);
+      expect(result.showConfig).toBe(false);
+      expect(result.force).toBe(false);
+    });
+
+    test('--init-config and --force set their flags (no query needed)', () => {
+      const result = parseArgs(['--init-config', '--force']);
+      expect(result.initConfig).toBe(true);
+      expect(result.force).toBe(true);
+    });
+
+    test('--show-config sets its flag', () => {
+      expect(parseArgs(['--show-config']).showConfig).toBe(true);
+    });
+
+    test('--help still wins over --init-config', () => {
+      expect(parseArgs(['--help', '--init-config']).help).toBe(true);
+    });
+  });
+
   describe('--history / --no-history', () => {
     test('--history sets the list action', () => {
       expect(parseArgs(['--history']).historyAction).toBe('list');

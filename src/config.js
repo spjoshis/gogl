@@ -72,3 +72,44 @@ export function loadConfigFile(env = process.env, fs = nodeFs) {
 
   return { values, warnings };
 }
+
+/**
+ * The starter config written by `--init-config`. Only keys with a concrete,
+ * always-applicable default are seeded; the optional scoping keys (region, safe,
+ * dateRange) are intentionally omitted so the file doesn't impose a locale or a
+ * date restriction the user didn't ask for. They can be added by hand — see the
+ * README for their accepted values.
+ *
+ * @returns {object}
+ */
+export function buildStarterConfig() {
+  return {
+    engine: 'google',
+    results: 10,
+    json: false,
+    format: 'plain',
+    descLength: 200,
+    maxRetries: 2,
+    timeoutSeconds: 30,
+    history: true
+  };
+}
+
+/**
+ * Write a starter config file to the resolved config path. Refuses to overwrite
+ * an existing file unless `force` is set. Creates parent directories as needed.
+ *
+ * @param {NodeJS.ProcessEnv} [env=process.env]
+ * @param {{ fs?: typeof nodeFs, force?: boolean }} [opts]
+ * @returns {string} the path written
+ * @throws {Error} when the file exists and `force` is not set
+ */
+export function initConfig(env = process.env, { fs = nodeFs, force = false } = {}) {
+  const configPath = resolveConfigPath(env);
+  if (!force && fs.existsSync(configPath)) {
+    throw new Error(`config already exists at ${configPath} (use --force to overwrite)`);
+  }
+  fs.mkdirSync(path.dirname(configPath), { recursive: true });
+  fs.writeFileSync(configPath, JSON.stringify(buildStarterConfig(), null, 2) + '\n', 'utf8');
+  return configPath;
+}

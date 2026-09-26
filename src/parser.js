@@ -51,6 +51,9 @@ export function parseArgs(argv, env = process.env) {
     cache: false,
     cacheTtlSeconds: undefined,
     clearCache: false,
+    initConfig: false,
+    showConfig: false,
+    force: false,
     maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', configDefaults.maxRetries, envWarnings),
     timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', configDefaults.timeoutSeconds, envWarnings),
     dateRange: readEnvDateRange(env, envWarnings, configDefaults.dateRange),
@@ -283,6 +286,18 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '--clear-cache') {
       options.clearCache = true;
+      continue;
+    }
+    if (token === '--init-config') {
+      options.initConfig = true;
+      continue;
+    }
+    if (token === '--show-config') {
+      options.showConfig = true;
+      continue;
+    }
+    if (token === '--force') {
+      options.force = true;
       continue;
     }
     if (token === '--no-config') {

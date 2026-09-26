@@ -212,6 +212,60 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(1);
     expect(stderr).toMatch(/--copy must be a positive integer/);
   });
+
+  test('--help documents --init-config and --show-config', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--init-config');
+    expect(stdout).toContain('--show-config');
+  });
+});
+
+describe('CLI config tooling (non-network, real filesystem)', () => {
+  let dir;
+  let file;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-cli-inittools-'));
+    file = path.join(dir, 'config.json');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('--init-config writes a file, exits 0, no search', () => {
+    const { status, stdout } = runCli(['--init-config'], { GOGL_CONFIG: file });
+    expect(status).toBe(0);
+    expect(stdout).toContain('Wrote starter config');
+    expect(stdout).not.toContain('Searching');
+    const parsed = JSON.parse(readFileSync(file, 'utf8'));
+    expect(parsed.engine).toBe('google');
+  });
+
+  test('--init-config refuses to overwrite without --force, but succeeds with it', () => {
+    writeFileSync(file, '{"engine":"duckduckgo"}');
+    const first = runCli(['--init-config'], { GOGL_CONFIG: file });
+    expect(first.status).toBe(1);
+    expect(first.stderr).toMatch(/already exists/);
+
+    const forced = runCli(['--init-config', '--force'], { GOGL_CONFIG: file });
+    expect(forced.status).toBe(0);
+    expect(JSON.parse(readFileSync(file, 'utf8')).engine).toBe('google');
+  });
+
+  test('--show-config prints effective settings as JSON and exits 0', () => {
+    const { status, stdout } = runCli(['--show-config'], { GOGL_ENGINE: 'duckduckgo', GOGL_CONFIG: file });
+    expect(status).toBe(0);
+    const cfg = JSON.parse(stdout);
+    expect(cfg.engine).toBe('duckduckgo');
+    expect(cfg.format).toBe('plain');
+    expect(cfg.configPath).toBe(file);
+  });
+
+  test('--show-config reflects CLI overrides winning over env', () => {
+    const { stdout } = runCli(['--show-config', '--engine', 'google'], { GOGL_ENGINE: 'duckduckgo', GOGL_CONFIG: file });
+    expect(JSON.parse(stdout).engine).toBe('google');
+  });
 });
 
 describe('CLI search history (non-network, real filesystem)', () => {

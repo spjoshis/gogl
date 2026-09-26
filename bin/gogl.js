@@ -11,6 +11,7 @@ import { resolveColor } from '../src/color.js';
 import { dedupeResults } from '../src/dedupe.js';
 import { excludeDomains } from '../src/filter.js';
 import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../src/cache.js';
+import { initConfig, resolveConfigPath } from '../src/config.js';
 import { openUrl } from '../src/open.js';
 import { copyToClipboard } from '../src/copy.js';
 import { record as recordHistory, list as listHistory, clear as clearHistory } from '../src/history.js';
@@ -47,6 +48,8 @@ Options:
       --timeout <secs>    Per-attempt page load timeout in seconds (default 30)
       --date-range <r>    Restrict results by age: d/w/m/y (day/week/month/year)
       --no-config         Skip the config file for this run
+      --init-config       Write a starter config file and exit (--force to overwrite)
+      --show-config       Print the effective settings (after precedence) and exit
   -h, --help              Show this help and exit
   -v, --version           Show version and exit
   --                      Treat all following arguments as the query
@@ -95,6 +98,8 @@ Examples:
   @google --format urls nodejs | head -3   # just the URLs, one per line
   @google --history                        # list your recent searches
   @google --history clear                  # wipe your search history
+  @google --init-config                    # scaffold a config file with defaults
+  @google --show-config                    # see what settings are actually in effect
 
 By default output is colorized only when writing to a terminal. Colors follow
 the NO_COLOR / FORCE_COLOR conventions and are never applied to --json output.`;
@@ -103,6 +108,29 @@ function getVersion() {
   const pkgPath = fileURLToPath(new URL('../package.json', import.meta.url));
   const pkg = JSON.parse(readFileSync(pkgPath, 'utf8'));
   return pkg.version;
+}
+
+// The settings actually in effect after the CLI > env > config > default
+// precedence chain, plus where the config file would be read from. Handy for
+// debugging "why am I getting these defaults?". Action-only fields (help,
+// version, openIndex, ...) are intentionally excluded.
+function effectiveConfig(options) {
+  return {
+    engine: options.engine,
+    results: options.results,
+    format: options.format,
+    descLength: options.descLength,
+    truncate: options.truncate,
+    dedupe: options.dedupe,
+    cache: options.cache,
+    maxRetries: options.maxRetries,
+    timeoutSeconds: options.timeoutSeconds,
+    dateRange: options.dateRange ?? null,
+    region: options.region ?? null,
+    safe: options.safe ?? null,
+    history: options.history,
+    configPath: resolveConfigPath()
+  };
 }
 
 function timeAgo(ts, now = Date.now()) {
@@ -150,6 +178,23 @@ async function main() {
     const dir = resolveCacheDir();
     const removed = clearCache(dir);
     console.log(`Cleared ${removed} cached ${removed === 1 ? 'entry' : 'entries'} from ${dir}.`);
+    process.exit(0);
+  }
+
+  if (options.initConfig) {
+    try {
+      const written = initConfig(process.env, { force: options.force });
+      console.log(`Wrote starter config to ${written}.`);
+      console.log('Edit it to change your defaults; see "@google --help" for the keys.');
+      process.exit(0);
+    } catch (error) {
+      console.error(`Error: ${error.message}`);
+      process.exit(1);
+    }
+  }
+
+  if (options.showConfig) {
+    console.log(JSON.stringify(effectiveConfig(options), null, 2));
     process.exit(0);
   }
 

@@ -92,6 +92,8 @@ npx @spjoshis/gogl "your query"
 | `--history [clear]` | List recent searches, or `clear` to wipe them (see [Search history](#-search-history)) |
 | `--no-history` | Do not record this search in history |
 | `--no-config` | Skip the [config file](#-configuration-file) for this run |
+| `--init-config` | Write a starter [config file](#-configuration-file) and exit (`--force` to overwrite) |
+| `--show-config` | Print the effective settings (after precedence) as JSON and exit |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
 | `--` | Treat everything after it as the query (for queries starting with `-`) |
@@ -357,6 +359,10 @@ Set your preferred defaults once instead of typing (or exporting) the same
 flags every time. Lowest-priority layer in the precedence chain — a CLI flag
 always wins, then an environment variable, then the config file, then the
 built-in default.
+
+Scaffold one with `@google --init-config` (writes a starter file with the
+common defaults; add `--force` to overwrite an existing one), and check what's
+actually in effect at any time with `@google --show-config`.
 
 ```json
 {
