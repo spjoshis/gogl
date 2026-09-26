@@ -579,4 +579,117 @@ describe('parseArgs', () => {
       expect(result.results).toBe(10);
     });
   });
+
+  describe('--site', () => {
+    test('folds site: into the query', () => {
+      expect(parseArgs(['--site', 'nodejs.org', 'streams']).query).toBe('streams site:nodejs.org');
+    });
+
+    test('supports the = form and strips a scheme/trailing slash', () => {
+      expect(parseArgs(['--site=https://nodejs.org/', 'streams']).query).toBe('streams site:nodejs.org');
+    });
+
+    test('rejects a value with whitespace', () => {
+      expect(() => parseArgs(['--site', 'a b', 'x'])).toThrow(/whitespace/);
+    });
+
+    test('errors when the value is missing', () => {
+      expect(() => parseArgs(['--site'])).toThrow(/--site requires a value/);
+    });
+  });
+
+  describe('--filetype', () => {
+    test('folds filetype: into the query and strips a leading dot', () => {
+      expect(parseArgs(['--filetype', '.PDF', 'report']).query).toBe('report filetype:pdf');
+    });
+
+    test('composes with --site (site before filetype)', () => {
+      expect(parseArgs(['--site', 'x.com', '--filetype', 'pdf', 'report']).query)
+        .toBe('report site:x.com filetype:pdf');
+    });
+
+    test('rejects a non-alphanumeric extension', () => {
+      expect(() => parseArgs(['--filetype', 'p df', 'x'])).toThrow(/alphanumeric/);
+    });
+  });
+
+  describe('--exclude', () => {
+    test('collects a single domain', () => {
+      expect(parseArgs(['--exclude', 'pinterest.com', 'cats']).exclude).toEqual(['pinterest.com']);
+    });
+
+    test('is repeatable', () => {
+      const result = parseArgs(['--exclude', 'a.com', '--exclude=b.com', 'x']);
+      expect(result.exclude).toEqual(['a.com', 'b.com']);
+    });
+
+    test('errors on an empty value', () => {
+      expect(() => parseArgs(['--exclude', '', 'x'])).toThrow(/--exclude requires a value/);
+    });
+  });
+
+  describe('--region', () => {
+    test('normalizes to lowercase', () => {
+      expect(parseArgs(['--region', 'DE', 'x']).region).toBe('de');
+    });
+
+    test('rejects a non-two-letter code', () => {
+      expect(() => parseArgs(['--region', 'deu', 'x'])).toThrow(/two-letter/);
+    });
+  });
+
+  describe('--safe', () => {
+    test('accepts on/off', () => {
+      expect(parseArgs(['--safe', 'on', 'x']).safe).toBe('on');
+      expect(parseArgs(['--safe=off', 'x']).safe).toBe('off');
+    });
+
+    test('rejects any other value', () => {
+      expect(() => parseArgs(['--safe', 'maybe', 'x'])).toThrow(/--safe must be one of/);
+    });
+  });
+
+  describe('new-flag env + config defaults', () => {
+    test('GOGL_REGION and GOGL_SAFE seed defaults; a bad one warns', () => {
+      const good = parseArgs(['x'], { GOGL_REGION: 'jp', GOGL_SAFE: 'on' });
+      expect(good.region).toBe('jp');
+      expect(good.safe).toBe('on');
+      const bad = parseArgs(['x'], { GOGL_REGION: 'nope' });
+      expect(bad.region).toBeUndefined();
+      expect(bad.envWarnings.join(' ')).toMatch(/GOGL_REGION/);
+    });
+
+    test('a CLI flag overrides the env default', () => {
+      expect(parseArgs(['--region', 'us', 'x'], { GOGL_REGION: 'de' }).region).toBe('us');
+    });
+
+    test('config file seeds region/safe (lower precedence than env)', () => {
+      const { dir, file } = tmpConfigFile({ region: 'fr', safe: 'off' });
+      try {
+        const result = parseArgs(['x'], { GOGL_CONFIG: file });
+        expect(result.region).toBe('fr');
+        expect(result.safe).toBe('off');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+
+    test('an invalid config region warns and is ignored', () => {
+      const { dir, file } = tmpConfigFile({ region: 'deutschland' });
+      try {
+        const result = parseArgs(['x'], { GOGL_CONFIG: file });
+        expect(result.region).toBeUndefined();
+        expect(result.envWarnings.join(' ')).toMatch(/config "region"/);
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('new-flag help/version precedence', () => {
+    test('--help wins over an invalid --region', () => {
+      const result = parseArgs(['--help', '--region', 'bad']);
+      expect(result.help).toBe(true);
+    });
+  });
 });

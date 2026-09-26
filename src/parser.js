@@ -1,11 +1,13 @@
 import { DEFAULT_ENGINE, ENGINE_NAMES, resolveEngine } from './engines/index.js';
 import { loadConfigFile } from './config.js';
+import { buildQuery } from './query.js';
 
 export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
 export const DEFAULT_MAX_RETRIES = 2;
 export const DEFAULT_TIMEOUT_SECONDS = 30;
 export const DATE_RANGES = ['d', 'w', 'm', 'y'];
+export const SAFE_VALUES = ['on', 'off'];
 
 /**
  * Parse CLI arguments into a normalized options object.
@@ -50,7 +52,12 @@ export function parseArgs(argv, env = process.env) {
     clearCache: false,
     maxRetries: readEnvPositiveInt(env, 'GOGL_MAX_RETRIES', configDefaults.maxRetries, envWarnings),
     timeoutSeconds: readEnvPositiveInt(env, 'GOGL_TIMEOUT', configDefaults.timeoutSeconds, envWarnings),
-    dateRange: readEnvDateRange(env, envWarnings, configDefaults.dateRange)
+    dateRange: readEnvDateRange(env, envWarnings, configDefaults.dateRange),
+    site: undefined,
+    filetype: undefined,
+    exclude: [],
+    region: readEnvRegion(env, envWarnings, configDefaults.region),
+    safe: readEnvSafe(env, envWarnings, configDefaults.safe)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -78,6 +85,14 @@ export function parseArgs(argv, env = process.env) {
   let rawTimeout = null;
   let sawDateRange = false;
   let rawDateRange = null;
+  let sawSite = false;
+  let rawSite = null;
+  let sawFiletype = false;
+  let rawFiletype = null;
+  let sawRegion = false;
+  let rawRegion = null;
+  let sawSafe = false;
+  let rawSafe = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -231,6 +246,84 @@ export function parseArgs(argv, env = process.env) {
       sawDateRange = true;
       continue;
     }
+    if (token === '--site') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--site requires a value');
+        continue;
+      }
+      rawSite = value;
+      sawSite = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--site=')) {
+      rawSite = token.slice('--site='.length);
+      sawSite = true;
+      continue;
+    }
+    if (token === '--filetype') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--filetype requires a value');
+        continue;
+      }
+      rawFiletype = value;
+      sawFiletype = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--filetype=')) {
+      rawFiletype = token.slice('--filetype='.length);
+      sawFiletype = true;
+      continue;
+    }
+    if (token === '--exclude') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--exclude requires a value');
+        continue;
+      }
+      collectExclude(options.exclude, value, (e) => { deferredError = deferredError || e; });
+      i++;
+      continue;
+    }
+    if (token.startsWith('--exclude=')) {
+      collectExclude(options.exclude, token.slice('--exclude='.length), (e) => { deferredError = deferredError || e; });
+      continue;
+    }
+    if (token === '--region') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--region requires a value');
+        continue;
+      }
+      rawRegion = value;
+      sawRegion = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--region=')) {
+      rawRegion = token.slice('--region='.length);
+      sawRegion = true;
+      continue;
+    }
+    if (token === '--safe') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--safe requires a value');
+        continue;
+      }
+      rawSafe = value;
+      sawSafe = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--safe=')) {
+      rawSafe = token.slice('--safe='.length);
+      sawSafe = true;
+      continue;
+    }
 
     // Any other flag-looking token is unknown. A lone '-' is treated as query.
     if (token.length > 1 && token.startsWith('-')) {
@@ -302,11 +395,46 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawSite) {
+    try {
+      options.site = normalizeSite(rawSite);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawFiletype) {
+    try {
+      options.filetype = normalizeFiletype(rawFiletype);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawRegion) {
+    try {
+      options.region = normalizeRegion(rawRegion);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawSafe) {
+    try {
+      options.safe = normalizeSafe(rawSafe);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
   if (deferredError) {
     throw deferredError;
   }
 
-  options.query = queryParts.join(' ').trim().replace(/\s+/g, ' ');
+  const rawQuery = queryParts.join(' ').trim().replace(/\s+/g, ' ');
+  // Fold `site:`/`filetype:` operators into the query the engine sees, so the
+  // banner, the search, and the cache key are all consistent.
+  options.query = buildQuery(rawQuery, { site: options.site, filetype: options.filetype });
   return options;
 }
 
@@ -333,6 +461,52 @@ function normalizeDateRange(raw) {
     throw new Error(`--date-range must be one of: ${DATE_RANGES.join(', ')}`);
   }
   return raw;
+}
+
+function normalizeSite(raw) {
+  const value = String(raw).trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  if (value === '') {
+    throw new Error('--site requires a value');
+  }
+  if (/\s/.test(value)) {
+    throw new Error('--site must not contain whitespace');
+  }
+  return value;
+}
+
+function normalizeFiletype(raw) {
+  const value = String(raw).trim().replace(/^\.+/, '').toLowerCase();
+  if (!/^[a-z0-9]+$/.test(value)) {
+    throw new Error('--filetype must be alphanumeric (e.g. pdf, docx)');
+  }
+  return value;
+}
+
+function normalizeRegion(raw) {
+  const value = String(raw).trim().toLowerCase();
+  if (!/^[a-z]{2}$/.test(value)) {
+    throw new Error('--region must be a two-letter code (e.g. us, de, jp)');
+  }
+  return value;
+}
+
+function normalizeSafe(raw) {
+  const value = String(raw).trim().toLowerCase();
+  if (!SAFE_VALUES.includes(value)) {
+    throw new Error(`--safe must be one of: ${SAFE_VALUES.join(', ')}`);
+  }
+  return value;
+}
+
+// Validate and append one --exclude domain (repeatable flag). An empty value is
+// a hard error (deferred), matching the other value-taking flags.
+function collectExclude(list, raw, onError) {
+  const value = String(raw).trim();
+  if (value === '') {
+    onError(new Error('--exclude requires a value'));
+    return;
+  }
+  list.push(value);
 }
 
 // Env vars only ever *seed defaults*: an invalid value is reported via
@@ -377,6 +551,32 @@ function readEnvDateRange(env, envWarnings, fallback = undefined) {
     return normalizeDateRange(raw);
   } catch {
     envWarnings.push(`Ignoring GOGL_DATE_RANGE=${raw}: must be one of ${DATE_RANGES.join(', ')}.`);
+    return fallback;
+  }
+}
+
+function readEnvRegion(env, envWarnings, fallback = undefined) {
+  const raw = env && env.GOGL_REGION;
+  if (!raw) {
+    return fallback;
+  }
+  try {
+    return normalizeRegion(raw);
+  } catch {
+    envWarnings.push(`Ignoring GOGL_REGION=${raw}: must be a two-letter code.`);
+    return fallback;
+  }
+}
+
+function readEnvSafe(env, envWarnings, fallback = undefined) {
+  const raw = env && env.GOGL_SAFE;
+  if (!raw) {
+    return fallback;
+  }
+  try {
+    return normalizeSafe(raw);
+  } catch {
+    envWarnings.push(`Ignoring GOGL_SAFE=${raw}: must be one of ${SAFE_VALUES.join(', ')}.`);
     return fallback;
   }
 }
@@ -433,7 +633,9 @@ function resolveConfigDefaults(configValues, warnings) {
     json: false,
     maxRetries: DEFAULT_MAX_RETRIES,
     timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
-    dateRange: undefined
+    dateRange: undefined,
+    region: undefined,
+    safe: undefined
   };
 
   if ('engine' in configValues) {
@@ -484,6 +686,22 @@ function resolveConfigDefaults(configValues, warnings) {
       defaults.dateRange = normalizeDateRange(configValues.dateRange);
     } catch {
       warnings.push(`Ignoring config "dateRange": must be one of: ${DATE_RANGES.join(', ')}.`);
+    }
+  }
+
+  if ('region' in configValues) {
+    try {
+      defaults.region = normalizeRegion(String(configValues.region));
+    } catch {
+      warnings.push('Ignoring config "region": must be a two-letter code.');
+    }
+  }
+
+  if ('safe' in configValues) {
+    try {
+      defaults.safe = normalizeSafe(String(configValues.safe));
+    } catch {
+      warnings.push(`Ignoring config "safe": must be one of: ${SAFE_VALUES.join(', ')}.`);
     }
   }
 

@@ -46,8 +46,29 @@ describe('engines/google', () => {
   });
 
   test('buildUrl appends tbs=qdr:<range> when a dateRange is given', () => {
-    const url = buildGoogleUrl('rust async', 5, 'w');
+    const url = buildGoogleUrl('rust async', 5, { dateRange: 'w' });
     expect(url).toBe('https://www.google.com/search?q=rust%20async&num=5&tbs=qdr:w');
+  });
+
+  test('buildUrl appends gl=<code> for a region', () => {
+    expect(buildGoogleUrl('rust', 5, { region: 'de' }))
+      .toBe('https://www.google.com/search?q=rust&num=5&gl=de');
+  });
+
+  test('buildUrl maps safe on/off to safe=active/off', () => {
+    expect(buildGoogleUrl('rust', 5, { safe: 'on' })).toContain('&safe=active');
+    expect(buildGoogleUrl('rust', 5, { safe: 'off' })).toContain('&safe=off');
+  });
+
+  test('buildUrl omits gl and safe when not requested', () => {
+    const url = buildGoogleUrl('rust', 5);
+    expect(url).not.toContain('gl=');
+    expect(url).not.toContain('safe=');
+  });
+
+  test('buildUrl combines dateRange, region and safe', () => {
+    expect(buildGoogleUrl('rust', 5, { dateRange: 'w', region: 'us', safe: 'on' }))
+      .toBe('https://www.google.com/search?q=rust&num=5&tbs=qdr:w&gl=us&safe=active');
   });
 
   test('extract pulls title/url/description and skips ads', () => {
@@ -89,8 +110,24 @@ describe('engines/duckduckgo', () => {
   });
 
   test('buildUrl appends df=<range> when a dateRange is given', () => {
-    const url = buildDdgUrl('rust async', 10, 'w');
+    const url = buildDdgUrl('rust async', 10, { dateRange: 'w' });
     expect(url).toBe('https://html.duckduckgo.com/html/?q=rust%20async&df=w');
+  });
+
+  test('buildUrl appends kl=<code> for a region', () => {
+    expect(buildDdgUrl('rust', 10, { region: 'de' }))
+      .toBe('https://html.duckduckgo.com/html/?q=rust&kl=de');
+  });
+
+  test('buildUrl maps safe on/off to kp=1/-2', () => {
+    expect(buildDdgUrl('rust', 10, { safe: 'on' })).toContain('&kp=1');
+    expect(buildDdgUrl('rust', 10, { safe: 'off' })).toContain('&kp=-2');
+  });
+
+  test('buildUrl omits kl and kp when not requested', () => {
+    const url = buildDdgUrl('rust', 10);
+    expect(url).not.toContain('kl=');
+    expect(url).not.toContain('kp=');
   });
 
   test('extract unwraps the /l/?uddg= redirect and reads the snippet', () => {

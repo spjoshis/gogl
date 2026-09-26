@@ -9,6 +9,7 @@ import { formatResults } from '../src/formatter.js';
 import { ENGINE_NAMES, resolveEngine } from '../src/engines/index.js';
 import { resolveColor } from '../src/color.js';
 import { dedupeResults } from '../src/dedupe.js';
+import { excludeDomains } from '../src/filter.js';
 import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../src/cache.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
@@ -22,6 +23,11 @@ Options:
       --color             Force colorized output
       --no-color          Disable colorized output
       --no-dedupe         Keep duplicate-URL results (deduped by default)
+      --site <domain>     Restrict results to a domain (adds site:<domain>)
+      --filetype <ext>    Restrict results to a file type (adds filetype:<ext>)
+      --exclude <domain>  Drop results from a domain (repeatable)
+      --region <code>     Two-letter region code to localize results (e.g. de)
+      --safe <on|off>     Toggle SafeSearch filtering
       --cache              Reuse a fresh cached result instead of searching again
       --cache-ttl <secs>   How long a cached result stays fresh (implies --cache; default ${DEFAULT_TTL_SECONDS})
       --no-cache           Force a live search, overriding --cache/--cache-ttl
@@ -38,8 +44,8 @@ Options:
 Config file (optional; lower precedence than env vars and flags):
   $XDG_CONFIG_HOME/gogl/config.json, or ~/.config/gogl/config.json.
   Override the path with GOGL_CONFIG. A JSON object with any of: engine,
-  results, json, maxRetries, timeoutSeconds, dateRange. Unknown keys and
-  invalid values are ignored with a warning, never a crash.
+  results, json, maxRetries, timeoutSeconds, dateRange, region, safe. Unknown
+  keys and invalid values are ignored with a warning, never a crash.
 
 Environment variables (used as defaults; CLI flags always win):
   GOGL_ENGINE             Default --engine value
@@ -50,6 +56,8 @@ Environment variables (used as defaults; CLI flags always win):
   GOGL_MAX_RETRIES        Default --retries value
   GOGL_TIMEOUT            Default --timeout value in seconds
   GOGL_DATE_RANGE         Default --date-range value
+  GOGL_REGION             Default --region value
+  GOGL_SAFE               Default --safe value (on/off)
   GOGL_CONFIG             Path to the config file (see above)
 
 Examples:
@@ -59,6 +67,9 @@ Examples:
   @google --cache nodejs streams          # reuse a cached result if less than an hour old
   @google --cache-ttl 300 nodejs streams  # cache for 5 minutes instead
   @google --date-range w nodejs streams   # only results from the past week
+  @google --site nodejs.org streams        # only results from nodejs.org
+  @google --filetype pdf annual report     # only PDF results
+  @google --exclude pinterest.com cute cats # drop pinterest.com results
   @google --no-config nodejs streams      # ignore your config file for this run
   @google --json "rust async" | jq '.[0].url'
 
@@ -135,9 +146,12 @@ async function main() {
       cacheTtlSeconds: options.cacheTtlSeconds,
       maxRetries: options.maxRetries,
       timeoutMs: options.timeoutSeconds * 1000,
-      dateRange: options.dateRange
+      dateRange: options.dateRange,
+      region: options.region,
+      safe: options.safe
     });
-    const results = options.dedupe ? dedupeResults(rawResults) : rawResults;
+    const deduped = options.dedupe ? dedupeResults(rawResults) : rawResults;
+    const results = excludeDomains(deduped, options.exclude);
 
     const color = resolveColor({
       mode: options.color,

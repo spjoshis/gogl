@@ -131,6 +131,41 @@ describe('CLI (non-network paths)', () => {
     expect(stdout).toContain('--no-config');
     expect(stdout).toContain('GOGL_CONFIG');
   });
+
+  test('--help documents the query-operator and localization flags', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--site');
+    expect(stdout).toContain('--filetype');
+    expect(stdout).toContain('--exclude');
+    expect(stdout).toContain('--region');
+    expect(stdout).toContain('--safe');
+    expect(stdout).toContain('GOGL_REGION');
+    expect(stdout).toContain('GOGL_SAFE');
+  });
+
+  test('invalid --region exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--region', 'deu', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/two-letter/);
+  });
+
+  test('invalid --safe exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--safe', 'maybe', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--safe must be one of/);
+  });
+
+  test('invalid --filetype exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--filetype', 'p df', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/alphanumeric/);
+  });
+
+  test('an invalid GOGL_SAFE prints a warning but --help still wins', () => {
+    const { status, stderr } = runCli(['--help'], { GOGL_SAFE: 'maybe' });
+    expect(status).toBe(0);
+    expect(stderr).toMatch(/GOGL_SAFE/);
+  });
 });
 
 describe('CLI config file (non-network, real filesystem)', () => {
