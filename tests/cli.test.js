@@ -166,6 +166,26 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(0);
     expect(stderr).toMatch(/GOGL_SAFE/);
   });
+
+  test('--help documents the output-format flags', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--format');
+    expect(stdout).toContain('--desc-length');
+    expect(stdout).toContain('--no-truncate');
+    expect(stdout).toContain('GOGL_FORMAT');
+  });
+
+  test('invalid --format exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--format', 'xml', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--format must be one of/);
+  });
+
+  test('invalid --desc-length exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--desc-length', 'abc', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/positive integer/i);
+  });
 });
 
 describe('CLI config file (non-network, real filesystem)', () => {

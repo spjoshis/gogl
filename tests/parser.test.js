@@ -692,4 +692,83 @@ describe('parseArgs', () => {
       expect(result.help).toBe(true);
     });
   });
+
+  describe('--format', () => {
+    test('defaults to plain', () => {
+      expect(parseArgs(['x']).format).toBe('plain');
+    });
+
+    test('accepts each supported format', () => {
+      for (const f of ['plain', 'json', 'ndjson', 'csv', 'table']) {
+        expect(parseArgs(['--format', f, 'x']).format).toBe(f);
+      }
+    });
+
+    test('the = form works and normalizes case', () => {
+      expect(parseArgs(['--format=CSV', 'x']).format).toBe('csv');
+    });
+
+    test('rejects an unknown format', () => {
+      expect(() => parseArgs(['--format', 'xml', 'x'])).toThrow(/--format must be one of/);
+    });
+
+    test('--json still sets format to json (and json flag)', () => {
+      const result = parseArgs(['--json', 'x']);
+      expect(result.format).toBe('json');
+      expect(result.json).toBe(true);
+    });
+
+    test('--format wins over --json within the CLI tier', () => {
+      expect(parseArgs(['--json', '--format', 'csv', 'x']).format).toBe('csv');
+    });
+
+    test('CLI --json beats an env GOGL_FORMAT', () => {
+      expect(parseArgs(['--json', 'x'], { GOGL_FORMAT: 'csv' }).format).toBe('json');
+    });
+
+    test('env GOGL_FORMAT is used when no CLI format/json is given', () => {
+      expect(parseArgs(['x'], { GOGL_FORMAT: 'ndjson' }).format).toBe('ndjson');
+    });
+
+    test('a bad GOGL_FORMAT warns and falls back to plain', () => {
+      const result = parseArgs(['x'], { GOGL_FORMAT: 'xml' });
+      expect(result.format).toBe('plain');
+      expect(result.envWarnings.join(' ')).toMatch(/GOGL_FORMAT/);
+    });
+
+    test('config format seeds the default (below env)', () => {
+      const { dir, file } = tmpConfigFile({ format: 'table' });
+      try {
+        expect(parseArgs(['x'], { GOGL_CONFIG: file }).format).toBe('table');
+        // env overrides config
+        expect(parseArgs(['x'], { GOGL_CONFIG: file, GOGL_FORMAT: 'csv' }).format).toBe('csv');
+      } finally {
+        rmSync(dir, { recursive: true, force: true });
+      }
+    });
+  });
+
+  describe('--desc-length / --no-truncate', () => {
+    test('defaults: descLength 200, truncate true', () => {
+      const result = parseArgs(['x']);
+      expect(result.descLength).toBe(200);
+      expect(result.truncate).toBe(true);
+    });
+
+    test('--desc-length sets a positive int', () => {
+      expect(parseArgs(['--desc-length', '80', 'x']).descLength).toBe(80);
+    });
+
+    test('rejects a non-positive --desc-length', () => {
+      expect(() => parseArgs(['--desc-length', '0', 'x'])).toThrow(/positive integer/);
+    });
+
+    test('--no-truncate flips truncate to false', () => {
+      expect(parseArgs(['--no-truncate', 'x']).truncate).toBe(false);
+    });
+
+    test('GOGL_DESC_LENGTH seeds the default', () => {
+      expect(parseArgs(['x'], { GOGL_DESC_LENGTH: '120' }).descLength).toBe(120);
+    });
+  });
 });
