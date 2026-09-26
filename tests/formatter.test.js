@@ -125,4 +125,105 @@ describe('formatResults', () => {
       expect(JSON.parse(output)).toEqual(one);
     });
   });
+
+  const sample = [
+    { title: 'First', url: 'https://first.com', description: 'First result' },
+    { title: 'Second', url: 'https://second.com', description: 'Second result' }
+  ];
+
+  describe('format: json (via format option)', () => {
+    test('format:"json" matches the legacy json:true output', () => {
+      expect(formatResults(sample, { format: 'json' })).toBe(formatResults(sample, { json: true }));
+    });
+  });
+
+  describe('format: ndjson', () => {
+    test('emits one compact JSON object per line, no wrapping array', () => {
+      const out = formatResults(sample, { format: 'ndjson' });
+      const lines = out.split('\n');
+      expect(lines).toHaveLength(2);
+      expect(JSON.parse(lines[0])).toEqual(sample[0]);
+      expect(JSON.parse(lines[1])).toEqual(sample[1]);
+      expect(out).not.toContain('[');
+    });
+
+    test('empty results produce empty output', () => {
+      expect(formatResults([], { format: 'ndjson' })).toBe('');
+    });
+
+    test('is never colorized', () => {
+      expect(formatResults(sample, { format: 'ndjson', color: true })).not.toMatch(ANSI);
+    });
+  });
+
+  describe('format: csv', () => {
+    test('has an RFC-4180 header and one row per result', () => {
+      const out = formatResults(sample, { format: 'csv' });
+      const lines = out.split('\n');
+      expect(lines[0]).toBe('title,url,description');
+      expect(lines[1]).toBe('First,https://first.com,First result');
+      expect(lines).toHaveLength(3);
+    });
+
+    test('quotes and escapes fields containing commas, quotes, or newlines', () => {
+      const tricky = [{ title: 'a,b', url: 'https://x.com', description: 'has "quotes"\nand newline' }];
+      const out = formatResults(tricky, { format: 'csv' });
+      // A quoted field may legitimately contain a literal newline (RFC-4180),
+      // so assert on the whole output rather than splitting on '\n'.
+      expect(out).toBe(
+        'title,url,description\n"a,b",https://x.com,"has ""quotes""\nand newline"'
+      );
+    });
+
+    test('empty results produce a header row only', () => {
+      expect(formatResults([], { format: 'csv' })).toBe('title,url,description');
+    });
+  });
+
+  describe('format: table', () => {
+    test('renders a bordered, aligned grid with a header', () => {
+      const out = formatResults(sample, { format: 'table' });
+      expect(out).toContain('┌');
+      expect(out).toContain('┐');
+      expect(out).toContain('└');
+      expect(out).toContain('Title');
+      expect(out).toContain('URL');
+      expect(out).toContain('First');
+      // no cell contains a newline that would break the grid
+      out.split('\n').forEach((line) => {
+        if (line.startsWith('│')) expect(line.endsWith('│')).toBe(true);
+      });
+    });
+
+    test('empty results say so', () => {
+      expect(formatResults([], { format: 'table' })).toBe('No results found.');
+    });
+
+    test('collapses newlines in a description cell', () => {
+      const multi = [{ title: 'T', url: 'https://x.com', description: 'line one\nline two' }];
+      const out = formatResults(multi, { format: 'table' });
+      expect(out).toContain('line one line two');
+    });
+  });
+
+  describe('descLength / truncate (plain)', () => {
+    const long = [{ title: 'T', url: 'https://x.com', description: 'A'.repeat(300) }];
+
+    test('defaults to 200 + ellipsis', () => {
+      const out = formatResults(long);
+      expect(out).toContain('A'.repeat(200) + '...');
+      expect(out).not.toContain('A'.repeat(201));
+    });
+
+    test('honors a custom descLength', () => {
+      const out = formatResults(long, { descLength: 50 });
+      expect(out).toContain('A'.repeat(50) + '...');
+    });
+
+    test('truncate:false shows the full description', () => {
+      const out = formatResults(long, { truncate: false });
+      expect(out).toContain('A'.repeat(300));
+      expect(out).not.toContain('...');
+    });
+  });
 });

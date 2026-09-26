@@ -1,6 +1,7 @@
 import { DEFAULT_ENGINE, ENGINE_NAMES, resolveEngine } from './engines/index.js';
 import { loadConfigFile } from './config.js';
 import { buildQuery } from './query.js';
+import { FORMATS, DEFAULT_DESC_LENGTH } from './formatter.js';
 
 export const DEFAULT_RESULTS = 10;
 export const MAX_RESULTS = 20;
@@ -57,7 +58,13 @@ export function parseArgs(argv, env = process.env) {
     filetype: undefined,
     exclude: [],
     region: readEnvRegion(env, envWarnings, configDefaults.region),
-    safe: readEnvSafe(env, envWarnings, configDefaults.safe)
+    safe: readEnvSafe(env, envWarnings, configDefaults.safe),
+    format: 'plain',
+    descLength: readEnvPositiveInt(env, 'GOGL_DESC_LENGTH', configDefaults.descLength, envWarnings),
+    truncate: true,
+    openIndex: undefined,
+    historyAction: undefined,
+    history: readEnvHistory(env, envWarnings, configDefaults.history)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -93,6 +100,13 @@ export function parseArgs(argv, env = process.env) {
   let rawRegion = null;
   let sawSafe = false;
   let rawSafe = null;
+  let sawFormat = false;
+  let rawFormat = null;
+  let sawJsonFlag = false;
+  let sawDescLength = false;
+  let rawDescLength = null;
+  let sawOpen = false;
+  let rawOpen = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -115,6 +129,79 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '--json') {
       options.json = true;
+      sawJsonFlag = true;
+      continue;
+    }
+    if (token === '--format') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--format requires a value');
+        continue;
+      }
+      rawFormat = value;
+      sawFormat = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--format=')) {
+      rawFormat = token.slice('--format='.length);
+      sawFormat = true;
+      continue;
+    }
+    if (token === '--no-truncate') {
+      options.truncate = false;
+      continue;
+    }
+    if (token === '--desc-length') {
+      const value = argv[i + 1];
+      if (value === undefined) {
+        deferredError = deferredError || new Error('--desc-length requires a value');
+        continue;
+      }
+      rawDescLength = value;
+      sawDescLength = true;
+      i++;
+      continue;
+    }
+    if (token.startsWith('--desc-length=')) {
+      rawDescLength = token.slice('--desc-length='.length);
+      sawDescLength = true;
+      continue;
+    }
+    if (token === '--open') {
+      // Optional value: consume the next token only if it's a number, so
+      // `--open nodejs` means "open #1 of a search for nodejs".
+      const value = argv[i + 1];
+      if (value !== undefined && /^\d+$/.test(value)) {
+        rawOpen = value;
+        i++;
+      } else {
+        rawOpen = '1';
+      }
+      sawOpen = true;
+      continue;
+    }
+    if (token.startsWith('--open=')) {
+      rawOpen = token.slice('--open='.length);
+      sawOpen = true;
+      continue;
+    }
+    if (token === '--no-history') {
+      options.history = false;
+      continue;
+    }
+    if (token === '--history') {
+      const value = argv[i + 1];
+      if (value === 'clear') {
+        options.historyAction = 'clear';
+        i++;
+      } else {
+        options.historyAction = 'list';
+      }
+      continue;
+    }
+    if (token.startsWith('--history=')) {
+      options.historyAction = token.slice('--history='.length) === 'clear' ? 'clear' : 'list';
       continue;
     }
     if (token === '--color') {
@@ -427,6 +514,46 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawDescLength) {
+    try {
+      options.descLength = normalizePositiveInt(rawDescLength, '--desc-length');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawOpen) {
+    try {
+      options.openIndex = normalizePositiveInt(rawOpen, '--open');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  // Resolve the effective output format across the two knobs (--format and the
+  // legacy --json) and their env+config defaults. Precedence is tiered by
+  // source (CLI > env > config); within a tier an explicit format beats the
+  // --json shortcut.
+  let cliFormat;
+  if (sawFormat) {
+    try {
+      cliFormat = normalizeFormat(rawFormat);
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+  const envConfigFormat = readEnvFormat(env, envWarnings, configDefaults.format);
+  if (cliFormat) {
+    options.format = cliFormat;
+  } else if (sawJsonFlag) {
+    options.format = 'json';
+  } else if (envConfigFormat) {
+    options.format = envConfigFormat;
+  } else {
+    options.format = options.json ? 'json' : 'plain';
+  }
+  options.json = options.format === 'json';
+
   if (deferredError) {
     throw deferredError;
   }
@@ -494,6 +621,14 @@ function normalizeSafe(raw) {
   const value = String(raw).trim().toLowerCase();
   if (!SAFE_VALUES.includes(value)) {
     throw new Error(`--safe must be one of: ${SAFE_VALUES.join(', ')}`);
+  }
+  return value;
+}
+
+function normalizeFormat(raw) {
+  const value = String(raw).trim().toLowerCase();
+  if (!FORMATS.includes(value)) {
+    throw new Error(`--format must be one of: ${FORMATS.join(', ')}`);
   }
   return value;
 }
@@ -581,6 +716,19 @@ function readEnvSafe(env, envWarnings, fallback = undefined) {
   }
 }
 
+function readEnvFormat(env, envWarnings, fallback = undefined) {
+  const raw = env && env.GOGL_FORMAT;
+  if (!raw) {
+    return fallback;
+  }
+  try {
+    return normalizeFormat(raw);
+  } catch {
+    envWarnings.push(`Ignoring GOGL_FORMAT=${raw}: must be one of ${FORMATS.join(', ')}.`);
+    return fallback;
+  }
+}
+
 function readEnvResults(env, envWarnings) {
   const raw = env && env.GOGL_RESULTS;
   if (!raw) {
@@ -613,6 +761,22 @@ function readEnvJson(env, envWarnings, fallback = false) {
   return fallback;
 }
 
+function readEnvHistory(env, envWarnings, fallback = true) {
+  const raw = env && env.GOGL_HISTORY;
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const normalized = raw.toLowerCase();
+  if (TRUTHY_ENV.has(normalized)) {
+    return true;
+  }
+  if (FALSY_ENV.has(normalized)) {
+    return false;
+  }
+  envWarnings.push(`Ignoring GOGL_HISTORY=${raw}: expected true/false, 1/0, or yes/no.`);
+  return fallback;
+}
+
 /**
  * Validate the raw config-file values against the same rules the CLI flags
  * and env vars use, returning a fully-populated defaults object (built-in
@@ -635,7 +799,10 @@ function resolveConfigDefaults(configValues, warnings) {
     timeoutSeconds: DEFAULT_TIMEOUT_SECONDS,
     dateRange: undefined,
     region: undefined,
-    safe: undefined
+    safe: undefined,
+    format: undefined,
+    descLength: DEFAULT_DESC_LENGTH,
+    history: true
   };
 
   if ('engine' in configValues) {
@@ -702,6 +869,30 @@ function resolveConfigDefaults(configValues, warnings) {
       defaults.safe = normalizeSafe(String(configValues.safe));
     } catch {
       warnings.push(`Ignoring config "safe": must be one of: ${SAFE_VALUES.join(', ')}.`);
+    }
+  }
+
+  if ('format' in configValues) {
+    try {
+      defaults.format = normalizeFormat(String(configValues.format));
+    } catch {
+      warnings.push(`Ignoring config "format": must be one of: ${FORMATS.join(', ')}.`);
+    }
+  }
+
+  if ('descLength' in configValues) {
+    try {
+      defaults.descLength = normalizePositiveInt(String(configValues.descLength), 'descLength');
+    } catch {
+      warnings.push('Ignoring config "descLength": must be a positive integer.');
+    }
+  }
+
+  if ('history' in configValues) {
+    if (typeof configValues.history === 'boolean') {
+      defaults.history = configValues.history;
+    } else {
+      warnings.push('Ignoring config "history": must be true or false.');
     }
   }
 

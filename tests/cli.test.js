@@ -166,6 +166,89 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(0);
     expect(stderr).toMatch(/GOGL_SAFE/);
   });
+
+  test('--help documents the output-format flags', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--format');
+    expect(stdout).toContain('--desc-length');
+    expect(stdout).toContain('--no-truncate');
+    expect(stdout).toContain('GOGL_FORMAT');
+  });
+
+  test('invalid --format exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--format', 'xml', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--format must be one of/);
+  });
+
+  test('invalid --desc-length exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--desc-length', 'abc', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/positive integer/i);
+  });
+
+  test('--help documents the workflow flags', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--open');
+    expect(stdout).toContain('--history');
+    expect(stdout).toContain('--no-history');
+    expect(stdout).toContain('GOGL_HISTORY');
+  });
+
+  test('invalid --open exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--open=0', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--open must be a positive integer/);
+  });
+});
+
+describe('CLI search history (non-network, real filesystem)', () => {
+  let dir;
+  let histFile;
+
+  beforeEach(() => {
+    dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-cli-history-'));
+    histFile = path.join(dir, 'history.jsonl');
+  });
+
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  test('--history on an empty history says so, exits 0, no search', () => {
+    const { status, stdout } = runCli(['--history'], { GOGL_HISTORY_FILE: histFile });
+    expect(status).toBe(0);
+    expect(stdout).toContain('No search history yet.');
+    expect(stdout).not.toContain('Searching');
+  });
+
+  test('--history lists a seeded entry', () => {
+    writeFileSync(histFile, JSON.stringify({ query: 'nodejs streams', engine: 'google', count: 7, ts: Date.now() }) + '\n');
+    const { status, stdout } = runCli(['--history'], { GOGL_HISTORY_FILE: histFile });
+    expect(status).toBe(0);
+    expect(stdout).toContain('nodejs streams');
+    expect(stdout).toContain('google');
+    expect(stdout).toContain('7 results');
+  });
+
+  test('--history clear reports the count and empties the file', () => {
+    writeFileSync(histFile, [
+      JSON.stringify({ query: 'a', engine: 'google', count: 1, ts: 1 }),
+      JSON.stringify({ query: 'b', engine: 'google', count: 2, ts: 2 })
+    ].join('\n') + '\n');
+    const { status, stdout } = runCli(['--history', 'clear'], { GOGL_HISTORY_FILE: histFile });
+    expect(status).toBe(0);
+    expect(stdout).toContain('Cleared 2 history entries');
+
+    const after = runCli(['--history'], { GOGL_HISTORY_FILE: histFile });
+    expect(after.stdout).toContain('No search history yet.');
+  });
+
+  test('--help wins over --history', () => {
+    const { status, stdout } = runCli(['--help', '--history'], { GOGL_HISTORY_FILE: histFile });
+    expect(status).toBe(0);
+    expect(stdout).toContain('Usage: @google');
+  });
 });
 
 describe('CLI config file (non-network, real filesystem)', () => {

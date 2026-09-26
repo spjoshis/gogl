@@ -1,6 +1,6 @@
 {
   "name": "@spjoshis/gogl",
-  "version": "1.5.0",
+  "version": "1.7.0",
   "description": "Ask anything to google from terminal",
   "type": "module",
   "main": "src/index.js",

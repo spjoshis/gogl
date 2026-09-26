@@ -2,7 +2,7 @@ import nodeFs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-const CONFIG_KEYS = ['engine', 'results', 'json', 'maxRetries', 'timeoutSeconds', 'dateRange', 'region', 'safe'];
+const CONFIG_KEYS = ['engine', 'results', 'json', 'maxRetries', 'timeoutSeconds', 'dateRange', 'region', 'safe', 'format', 'descLength', 'history'];
 
 /**
  * Resolve the config file path.

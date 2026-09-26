@@ -66,7 +66,10 @@ npx @spjoshis/gogl "your query"
 | Option | Description |
 |--------|-------------|
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
-| `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
+| `--json` | Output results as JSON on stdout (alias for `--format json`) |
+| `--format <fmt>` | Output format: `plain`, `json`, `ndjson`, `csv`, `table` (default `plain`) |
+| `--desc-length <n>` | Max description length before truncating (plain/table; default 200) |
+| `--no-truncate` | Do not truncate descriptions (plain/table) |
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
 | `--color` | Force colorized output (even when piped) |
 | `--no-color` | Disable colorized output |
@@ -84,6 +87,9 @@ npx @spjoshis/gogl "your query"
 | `-r, --retries <n>` | Retry attempts on failure (default 2) |
 | `--timeout <seconds>` | Per-attempt page load timeout (default 30) |
 | `--date-range <d\|w\|m\|y>` | Restrict results to the past day/week/month/year (default: no restriction) |
+| `--open [n]` | Open result `n` (default 1) in your default browser |
+| `--history [clear]` | List recent searches, or `clear` to wipe them (see [Search history](#-search-history)) |
+| `--no-history` | Do not record this search in history |
 | `--no-config` | Skip the [config file](#-configuration-file) for this run |
 | `-h, --help` | Show help and exit |
 | `-v, --version` | Show the version and exit |
@@ -102,6 +108,13 @@ npx @spjoshis/gogl "your query"
 @google --filetype pdf annual report     # only PDF results
 @google --exclude pinterest.com cute cats # drop pinterest.com (and subdomains)
 @google --region de --safe on rezepte     # localized, SafeSearch-filtered results
+@google --format table nodejs streams     # compact aligned table view
+@google --format csv nodejs > results.csv # spreadsheet-friendly output
+@google --format ndjson nodejs | jq '.url' # one JSON object per line
+@google --no-truncate --engine duckduckgo rust  # full descriptions
+@google --open 2 nodejs streams          # open the 2nd result in your browser
+@google --history                        # list your recent searches
+@google --history clear                  # wipe your search history
 @google --help                     # usage
 ```
 
@@ -353,7 +366,8 @@ built-in default.
 - **Location:** `$XDG_CONFIG_HOME/gogl/config.json`, or `~/.config/gogl/config.json`
   by default. Override the path entirely with `GOGL_CONFIG`.
 - **Supported keys:** `engine`, `results`, `json`, `maxRetries`, `timeoutSeconds`,
-  `dateRange`, `region`, `safe` — the same values each has as a CLI flag/env var.
+  `dateRange`, `region`, `safe`, `format`, `descLength`, `history` — the same
+  values each has as a CLI flag/env var.
 - **Optional and resilient:** no file is required; a missing file is a silent
   no-op. An unknown key or an invalid value for a known key is ignored with a
   warning on stderr rather than crashing the command — only that one key falls
@@ -361,6 +375,27 @@ built-in default.
 - **`--no-config`** skips the config file for a single run (env vars and CLI
   flags still apply) — useful for scripts that need to ignore whatever the
   invoking user has configured locally.
+
+## 🕘 Search History
+
+Every successful search is recorded locally so you can look back at what you
+searched for.
+
+```bash
+@google --history         # list recent searches, newest first
+@google --history clear   # wipe the history
+@google --no-history foo  # run a search without recording it
+```
+
+- **Local only:** history is stored on your machine and **never transmitted**.
+- **Location:** `$XDG_STATE_HOME/gogl/history.jsonl`, or
+  `~/.local/state/gogl/history.jsonl` by default. Override with
+  `GOGL_HISTORY_FILE`. It's a plain [JSONL](https://jsonlines.org/) file
+  (`{query, engine, count, ts}` per line), capped at the most recent 1000 entries.
+- **Opt out:** disable recording for one run with `--no-history`, or globally
+  with `GOGL_HISTORY=false` or `history: false` in your [config file](#-configuration-file).
+- **Resilient:** a missing or damaged history file never breaks a search —
+  recording is best-effort and corrupt lines are skipped when listing.
 
 ## 🐛 Troubleshooting
 
@@ -514,6 +549,8 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_ENGINE` | Default `--engine` value | `export GOGL_ENGINE=duckduckgo` |
 | `GOGL_RESULTS` | Default `--results` value | `export GOGL_RESULTS=5` |
 | `GOGL_JSON` | Default `--json` value | `export GOGL_JSON=true` (also accepts `1`/`yes`, and `false`/`0`/`no`) |
+| `GOGL_FORMAT` | Default `--format` value (`plain`, `json`, `ndjson`, `csv`, `table`) | unset (`plain`) |
+| `GOGL_DESC_LENGTH` | Default `--desc-length` value | `200` |
 | `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) | unset |
 | `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
 | `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
@@ -521,6 +558,8 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_MAX_RETRIES` | Default `--retries` value | `2` |
 | `GOGL_TIMEOUT` | Default `--timeout` value in seconds | `30` |
 | `GOGL_DATE_RANGE` | Default `--date-range` value (`d`, `w`, `m`, or `y`) | unset (no restriction) |
+| `GOGL_HISTORY` | Record searches in history (`true`/`false`, `1`/`0`, `yes`/`no`) | `true` |
+| `GOGL_HISTORY_FILE` | Path to the search-history file (JSONL) | `$XDG_STATE_HOME/gogl/history.jsonl` or `~/.local/state/gogl/history.jsonl` |
 | `GOGL_REGION` | Default `--region` value (two-letter code) | unset (engine default) |
 | `GOGL_SAFE` | Default `--safe` value (`on`/`off`) | unset (engine default) |
 | `GOGL_CONFIG` | Path to the [config file](#-configuration-file) | `$XDG_CONFIG_HOME/gogl/config.json` or `~/.config/gogl/config.json` |
@@ -676,9 +715,9 @@ Planned features and improvements:
 - [x] Result caching
 - [x] Multiple search engine support (Google, DuckDuckGo)
 - [x] Colorized terminal output
-- [ ] Rich table/box formatting
+- [x] Rich table/box formatting
 - [x] Result deduplication
-- [ ] Search history
+- [x] Search history
 - [x] Configuration file support
 
 ## 📊 Stats
