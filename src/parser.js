@@ -61,7 +61,10 @@ export function parseArgs(argv, env = process.env) {
     safe: readEnvSafe(env, envWarnings, configDefaults.safe),
     format: 'plain',
     descLength: readEnvPositiveInt(env, 'GOGL_DESC_LENGTH', configDefaults.descLength, envWarnings),
-    truncate: true
+    truncate: true,
+    openIndex: undefined,
+    historyAction: undefined,
+    history: readEnvHistory(env, envWarnings, configDefaults.history)
   };
 
   const envResults = readEnvResults(env, envWarnings);
@@ -102,6 +105,8 @@ export function parseArgs(argv, env = process.env) {
   let sawJsonFlag = false;
   let sawDescLength = false;
   let rawDescLength = null;
+  let sawOpen = false;
+  let rawOpen = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -161,6 +166,42 @@ export function parseArgs(argv, env = process.env) {
     if (token.startsWith('--desc-length=')) {
       rawDescLength = token.slice('--desc-length='.length);
       sawDescLength = true;
+      continue;
+    }
+    if (token === '--open') {
+      // Optional value: consume the next token only if it's a number, so
+      // `--open nodejs` means "open #1 of a search for nodejs".
+      const value = argv[i + 1];
+      if (value !== undefined && /^\d+$/.test(value)) {
+        rawOpen = value;
+        i++;
+      } else {
+        rawOpen = '1';
+      }
+      sawOpen = true;
+      continue;
+    }
+    if (token.startsWith('--open=')) {
+      rawOpen = token.slice('--open='.length);
+      sawOpen = true;
+      continue;
+    }
+    if (token === '--no-history') {
+      options.history = false;
+      continue;
+    }
+    if (token === '--history') {
+      const value = argv[i + 1];
+      if (value === 'clear') {
+        options.historyAction = 'clear';
+        i++;
+      } else {
+        options.historyAction = 'list';
+      }
+      continue;
+    }
+    if (token.startsWith('--history=')) {
+      options.historyAction = token.slice('--history='.length) === 'clear' ? 'clear' : 'list';
       continue;
     }
     if (token === '--color') {
@@ -481,6 +522,14 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawOpen) {
+    try {
+      options.openIndex = normalizePositiveInt(rawOpen, '--open');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
   // Resolve the effective output format across the two knobs (--format and the
   // legacy --json) and their env+config defaults. Precedence is tiered by
   // source (CLI > env > config); within a tier an explicit format beats the
@@ -712,6 +761,22 @@ function readEnvJson(env, envWarnings, fallback = false) {
   return fallback;
 }
 
+function readEnvHistory(env, envWarnings, fallback = true) {
+  const raw = env && env.GOGL_HISTORY;
+  if (raw === undefined || raw === '') {
+    return fallback;
+  }
+  const normalized = raw.toLowerCase();
+  if (TRUTHY_ENV.has(normalized)) {
+    return true;
+  }
+  if (FALSY_ENV.has(normalized)) {
+    return false;
+  }
+  envWarnings.push(`Ignoring GOGL_HISTORY=${raw}: expected true/false, 1/0, or yes/no.`);
+  return fallback;
+}
+
 /**
  * Validate the raw config-file values against the same rules the CLI flags
  * and env vars use, returning a fully-populated defaults object (built-in
@@ -736,7 +801,8 @@ function resolveConfigDefaults(configValues, warnings) {
     region: undefined,
     safe: undefined,
     format: undefined,
-    descLength: DEFAULT_DESC_LENGTH
+    descLength: DEFAULT_DESC_LENGTH,
+    history: true
   };
 
   if ('engine' in configValues) {
@@ -819,6 +885,14 @@ function resolveConfigDefaults(configValues, warnings) {
       defaults.descLength = normalizePositiveInt(String(configValues.descLength), 'descLength');
     } catch {
       warnings.push('Ignoring config "descLength": must be a positive integer.');
+    }
+  }
+
+  if ('history' in configValues) {
+    if (typeof configValues.history === 'boolean') {
+      defaults.history = configValues.history;
+    } else {
+      warnings.push('Ignoring config "history": must be true or false.');
     }
   }
 
