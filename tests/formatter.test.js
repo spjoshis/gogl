@@ -156,6 +156,25 @@ describe('formatResults', () => {
     });
   });
 
+  describe('format: urls', () => {
+    test('emits one URL per line, nothing else', () => {
+      expect(formatResults(sample, { format: 'urls' })).toBe('https://first.com\nhttps://second.com');
+    });
+
+    test('skips entries without a usable url', () => {
+      const mixed = [{ title: 'a', url: 'https://a.com' }, { title: 'b' }, { title: 'c', url: '' }];
+      expect(formatResults(mixed, { format: 'urls' })).toBe('https://a.com');
+    });
+
+    test('empty results produce empty output', () => {
+      expect(formatResults([], { format: 'urls' })).toBe('');
+    });
+
+    test('is never colorized', () => {
+      expect(formatResults(sample, { format: 'urls', color: true })).not.toMatch(ANSI);
+    });
+  });
+
   describe('format: csv', () => {
     test('has an RFC-4180 header and one row per result', () => {
       const out = formatResults(sample, { format: 'csv' });

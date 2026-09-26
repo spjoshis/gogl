@@ -1,7 +1,7 @@
 import { SGR, paint } from './color.js';
 
 export const DEFAULT_DESC_LENGTH = 200;
-export const FORMATS = ['plain', 'json', 'ndjson', 'csv', 'table'];
+export const FORMATS = ['plain', 'json', 'ndjson', 'csv', 'table', 'urls'];
 
 /**
  * Render a result set in the requested format.
@@ -33,6 +33,8 @@ export function formatResults(results, options = {}) {
       return JSON.stringify(results ?? [], null, 2);
     case 'ndjson':
       return list.map((r) => JSON.stringify(r)).join('\n');
+    case 'urls':
+      return list.map((r) => r && r.url).filter((u) => typeof u === 'string' && u !== '').join('\n');
     case 'csv':
       return renderCsv(list);
     case 'table':

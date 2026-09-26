@@ -200,6 +200,18 @@ describe('CLI (non-network paths)', () => {
     expect(status).toBe(1);
     expect(stderr).toMatch(/--open must be a positive integer/);
   });
+
+  test('--help documents --copy and the urls format', () => {
+    const { stdout } = runCli(['--help']);
+    expect(stdout).toContain('--copy');
+    expect(stdout).toContain('urls');
+  });
+
+  test('invalid --copy exits 1 with an error on stderr', () => {
+    const { status, stderr } = runCli(['--copy=0', 'foo']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--copy must be a positive integer/);
+  });
 });
 
 describe('CLI search history (non-network, real filesystem)', () => {
