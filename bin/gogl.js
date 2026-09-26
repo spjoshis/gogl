@@ -12,6 +12,7 @@ import { dedupeResults } from '../src/dedupe.js';
 import { excludeDomains } from '../src/filter.js';
 import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../src/cache.js';
 import { openUrl } from '../src/open.js';
+import { copyToClipboard } from '../src/copy.js';
 import { record as recordHistory, list as listHistory, clear as clearHistory } from '../src/history.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
@@ -21,7 +22,7 @@ Ask anything to Google from your terminal.
 Options:
   -n, --results <count>   Number of results to return (1-20, default 10)
       --json              Output results as JSON (alias for --format json)
-      --format <fmt>      Output format: plain, json, ndjson, csv, table (default plain)
+      --format <fmt>      Output format: plain, json, ndjson, csv, table, urls (default plain)
       --desc-length <n>   Max description length before truncating (default 200)
       --no-truncate       Do not truncate descriptions (plain/table)
       --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
@@ -38,6 +39,7 @@ Options:
       --no-cache           Force a live search, overriding --cache/--cache-ttl
       --clear-cache        Delete all cached results and exit
       --open [n]          Open result n (default 1) in the default browser
+      --copy [n]          Copy result n's URL (default 1) to the clipboard
       --history [clear]   List recent searches, or 'clear' to wipe them
       --no-history        Do not record this search in history
   -q, --quiet             Suppress the "Searching..." progress banner
@@ -89,6 +91,8 @@ Examples:
   @google --json "rust async" | jq '.[0].url'
   @google --format ndjson "rust async" | jq '.url'  # one JSON object per line
   @google --open 2 nodejs streams          # open the 2nd result in your browser
+  @google --copy nodejs streams            # copy the top result's URL to the clipboard
+  @google --format urls nodejs | head -3   # just the URLs, one per line
   @google --history                        # list your recent searches
   @google --history clear                  # wipe your search history
 
@@ -180,10 +184,11 @@ async function main() {
   try {
     const engineLabel = resolveEngine(options.engine).label;
 
-    // json/ndjson/csv are machine-readable: their payload owns stdout so it can
-    // be piped, and they're never colorized.
+    // json/ndjson/csv/urls are machine-readable: their payload owns stdout so it
+    // can be piped, and they're never colorized.
     const machineFormat =
-      options.format === 'json' || options.format === 'ndjson' || options.format === 'csv';
+      options.format === 'json' || options.format === 'ndjson' ||
+      options.format === 'csv' || options.format === 'urls';
 
     // Keep stdout clean for machine formats so they can be piped; progress goes
     // to stderr. --quiet suppresses it entirely, which also helps piping.
@@ -248,6 +253,29 @@ async function main() {
         }
       } catch (openError) {
         console.error(`Error: could not open the browser: ${openError.message}`);
+        process.exit(1);
+      }
+    }
+
+    if (options.copyIndex !== undefined) {
+      if (results.length === 0) {
+        console.error('Error: No results to copy.');
+        process.exit(1);
+      }
+      if (options.copyIndex > results.length) {
+        console.error(
+          `Error: No result #${options.copyIndex} to copy (only ${results.length} ${results.length === 1 ? 'result' : 'results'}).`
+        );
+        process.exit(1);
+      }
+      const target = results[options.copyIndex - 1];
+      try {
+        copyToClipboard(target.url);
+        if (!options.quiet) {
+          console.error(`Copied result #${options.copyIndex} to clipboard: ${target.url}`);
+        }
+      } catch (copyError) {
+        console.error(`Error: could not copy to the clipboard: ${copyError.message}`);
         process.exit(1);
       }
     }

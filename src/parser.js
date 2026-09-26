@@ -63,6 +63,7 @@ export function parseArgs(argv, env = process.env) {
     descLength: readEnvPositiveInt(env, 'GOGL_DESC_LENGTH', configDefaults.descLength, envWarnings),
     truncate: true,
     openIndex: undefined,
+    copyIndex: undefined,
     historyAction: undefined,
     history: readEnvHistory(env, envWarnings, configDefaults.history)
   };
@@ -107,6 +108,8 @@ export function parseArgs(argv, env = process.env) {
   let rawDescLength = null;
   let sawOpen = false;
   let rawOpen = null;
+  let sawCopy = false;
+  let rawCopy = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -184,6 +187,24 @@ export function parseArgs(argv, env = process.env) {
     if (token.startsWith('--open=')) {
       rawOpen = token.slice('--open='.length);
       sawOpen = true;
+      continue;
+    }
+    if (token === '--copy') {
+      // Optional value, same rule as --open: consume the next token only if
+      // it's a number, so `--copy nodejs` means "copy #1 of a search for nodejs".
+      const value = argv[i + 1];
+      if (value !== undefined && /^\d+$/.test(value)) {
+        rawCopy = value;
+        i++;
+      } else {
+        rawCopy = '1';
+      }
+      sawCopy = true;
+      continue;
+    }
+    if (token.startsWith('--copy=')) {
+      rawCopy = token.slice('--copy='.length);
+      sawCopy = true;
       continue;
     }
     if (token === '--no-history') {
@@ -525,6 +546,14 @@ export function parseArgs(argv, env = process.env) {
   if (sawOpen) {
     try {
       options.openIndex = normalizePositiveInt(rawOpen, '--open');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
+  if (sawCopy) {
+    try {
+      options.copyIndex = normalizePositiveInt(rawCopy, '--copy');
     } catch (error) {
       deferredError = deferredError || error;
     }

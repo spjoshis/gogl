@@ -804,6 +804,40 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--copy', () => {
+    test('bare --copy defaults to result #1', () => {
+      const result = parseArgs(['--copy', 'nodejs']);
+      expect(result.copyIndex).toBe(1);
+      expect(result.query).toBe('nodejs');
+    });
+
+    test('consumes a numeric argument as the index', () => {
+      expect(parseArgs(['--copy', '3', 'nodejs']).copyIndex).toBe(3);
+    });
+
+    test('the = form works', () => {
+      expect(parseArgs(['--copy=2', 'nodejs']).copyIndex).toBe(2);
+    });
+
+    test('does not consume a non-numeric next token', () => {
+      const result = parseArgs(['--copy', 'streams']);
+      expect(result.copyIndex).toBe(1);
+      expect(result.query).toBe('streams');
+    });
+
+    test('rejects a non-positive index', () => {
+      expect(() => parseArgs(['--copy=0', 'x'])).toThrow(/--copy must be a positive integer/);
+    });
+
+    test('is undefined when not requested', () => {
+      expect(parseArgs(['x']).copyIndex).toBeUndefined();
+    });
+
+    test('--format accepts urls', () => {
+      expect(parseArgs(['--format', 'urls', 'x']).format).toBe('urls');
+    });
+  });
+
   describe('--history / --no-history', () => {
     test('--history sets the list action', () => {
       expect(parseArgs(['--history']).historyAction).toBe('list');

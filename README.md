@@ -67,7 +67,7 @@ npx @spjoshis/gogl "your query"
 |--------|-------------|
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
 | `--json` | Output results as JSON on stdout (alias for `--format json`) |
-| `--format <fmt>` | Output format: `plain`, `json`, `ndjson`, `csv`, `table` (default `plain`) |
+| `--format <fmt>` | Output format: `plain`, `json`, `ndjson`, `csv`, `table`, `urls` (default `plain`) |
 | `--desc-length <n>` | Max description length before truncating (plain/table; default 200) |
 | `--no-truncate` | Do not truncate descriptions (plain/table) |
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
@@ -88,6 +88,7 @@ npx @spjoshis/gogl "your query"
 | `--timeout <seconds>` | Per-attempt page load timeout (default 30) |
 | `--date-range <d\|w\|m\|y>` | Restrict results to the past day/week/month/year (default: no restriction) |
 | `--open [n]` | Open result `n` (default 1) in your default browser |
+| `--copy [n]` | Copy result `n`'s URL (default 1) to the clipboard |
 | `--history [clear]` | List recent searches, or `clear` to wipe them (see [Search history](#-search-history)) |
 | `--no-history` | Do not record this search in history |
 | `--no-config` | Skip the [config file](#-configuration-file) for this run |
@@ -113,6 +114,8 @@ npx @spjoshis/gogl "your query"
 @google --format ndjson nodejs | jq '.url' # one JSON object per line
 @google --no-truncate --engine duckduckgo rust  # full descriptions
 @google --open 2 nodejs streams          # open the 2nd result in your browser
+@google --copy nodejs streams            # copy the top result's URL to the clipboard
+@google --format urls nodejs | head -3   # just the URLs, one per line
 @google --history                        # list your recent searches
 @google --history clear                  # wipe your search history
 @google --help                     # usage
