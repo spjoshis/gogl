@@ -66,7 +66,10 @@ npx @spjoshis/gogl "your query"
 | Option | Description |
 |--------|-------------|
 | `-n, --results <count>` | Number of results to return (1–20, default 10) |
-| `--json` | Output results as JSON on stdout (ideal for scripting/piping) |
+| `--json` | Output results as JSON on stdout (alias for `--format json`) |
+| `--format <fmt>` | Output format: `plain`, `json`, `ndjson`, `csv`, `table` (default `plain`) |
+| `--desc-length <n>` | Max description length before truncating (plain/table; default 200) |
+| `--no-truncate` | Do not truncate descriptions (plain/table) |
 | `--engine <name>` | Search engine to use: `google`, `duckduckgo` (default: `google`) |
 | `--color` | Force colorized output (even when piped) |
 | `--no-color` | Disable colorized output |
@@ -102,6 +105,10 @@ npx @spjoshis/gogl "your query"
 @google --filetype pdf annual report     # only PDF results
 @google --exclude pinterest.com cute cats # drop pinterest.com (and subdomains)
 @google --region de --safe on rezepte     # localized, SafeSearch-filtered results
+@google --format table nodejs streams     # compact aligned table view
+@google --format csv nodejs > results.csv # spreadsheet-friendly output
+@google --format ndjson nodejs | jq '.url' # one JSON object per line
+@google --no-truncate --engine duckduckgo rust  # full descriptions
 @google --help                     # usage
 ```
 
@@ -353,7 +360,8 @@ built-in default.
 - **Location:** `$XDG_CONFIG_HOME/gogl/config.json`, or `~/.config/gogl/config.json`
   by default. Override the path entirely with `GOGL_CONFIG`.
 - **Supported keys:** `engine`, `results`, `json`, `maxRetries`, `timeoutSeconds`,
-  `dateRange`, `region`, `safe` — the same values each has as a CLI flag/env var.
+  `dateRange`, `region`, `safe`, `format`, `descLength` — the same values each has
+  as a CLI flag/env var.
 - **Optional and resilient:** no file is required; a missing file is a silent
   no-op. An unknown key or an invalid value for a known key is ignored with a
   warning on stderr rather than crashing the command — only that one key falls
@@ -514,6 +522,8 @@ CLI flag always overrides the matching environment variable.
 | `GOGL_ENGINE` | Default `--engine` value | `export GOGL_ENGINE=duckduckgo` |
 | `GOGL_RESULTS` | Default `--results` value | `export GOGL_RESULTS=5` |
 | `GOGL_JSON` | Default `--json` value | `export GOGL_JSON=true` (also accepts `1`/`yes`, and `false`/`0`/`no`) |
+| `GOGL_FORMAT` | Default `--format` value (`plain`, `json`, `ndjson`, `csv`, `table`) | unset (`plain`) |
+| `GOGL_DESC_LENGTH` | Default `--desc-length` value | `200` |
 | `NO_COLOR` | Any non-empty value disables colorized output (see [no-color.org](https://no-color.org)) | unset |
 | `FORCE_COLOR` | Enables colorized output even when not writing to a terminal | unset |
 | `GOGL_CACHE_DIR` | Directory used to store cached results | `$XDG_CACHE_HOME/gogl` or `~/.cache/gogl` |
@@ -676,7 +686,7 @@ Planned features and improvements:
 - [x] Result caching
 - [x] Multiple search engine support (Google, DuckDuckGo)
 - [x] Colorized terminal output
-- [ ] Rich table/box formatting
+- [x] Rich table/box formatting
 - [x] Result deduplication
 - [ ] Search history
 - [x] Configuration file support

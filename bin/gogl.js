@@ -18,7 +18,10 @@ Ask anything to Google from your terminal.
 
 Options:
   -n, --results <count>   Number of results to return (1-20, default 10)
-      --json              Output results as JSON (to stdout)
+      --json              Output results as JSON (alias for --format json)
+      --format <fmt>      Output format: plain, json, ndjson, csv, table (default plain)
+      --desc-length <n>   Max description length before truncating (default 200)
+      --no-truncate       Do not truncate descriptions (plain/table)
       --engine <name>     Search engine to use: ${ENGINE_NAMES.join(', ')} (default: google)
       --color             Force colorized output
       --no-color          Disable colorized output
@@ -44,13 +47,16 @@ Options:
 Config file (optional; lower precedence than env vars and flags):
   $XDG_CONFIG_HOME/gogl/config.json, or ~/.config/gogl/config.json.
   Override the path with GOGL_CONFIG. A JSON object with any of: engine,
-  results, json, maxRetries, timeoutSeconds, dateRange, region, safe. Unknown
-  keys and invalid values are ignored with a warning, never a crash.
+  results, json, maxRetries, timeoutSeconds, dateRange, region, safe, format,
+  descLength. Unknown keys and invalid values are ignored with a warning,
+  never a crash.
 
 Environment variables (used as defaults; CLI flags always win):
   GOGL_ENGINE             Default --engine value
   GOGL_RESULTS            Default --results value
   GOGL_JSON               Default --json value (true/false, 1/0, yes/no)
+  GOGL_FORMAT             Default --format value
+  GOGL_DESC_LENGTH        Default --desc-length value
   GOGL_CACHE_DIR          Directory used to store cached results
   GOGL_CACHE_TTL          Default --cache-ttl value in seconds
   GOGL_MAX_RETRIES        Default --retries value
@@ -71,7 +77,10 @@ Examples:
   @google --filetype pdf annual report     # only PDF results
   @google --exclude pinterest.com cute cats # drop pinterest.com results
   @google --no-config nodejs streams      # ignore your config file for this run
+  @google --format table nodejs streams    # compact aligned table view
+  @google --format csv nodejs > out.csv    # spreadsheet-friendly output
   @google --json "rust async" | jq '.[0].url'
+  @google --format ndjson "rust async" | jq '.url'  # one JSON object per line
 
 By default output is colorized only when writing to a terminal. Colors follow
 the NO_COLOR / FORCE_COLOR conventions and are never applied to --json output.`;
@@ -128,11 +137,16 @@ async function main() {
   try {
     const engineLabel = resolveEngine(options.engine).label;
 
-    // Keep stdout clean for JSON so it can be piped; progress goes to stderr.
-    // --quiet suppresses it entirely, which also helps piping non-JSON output.
+    // json/ndjson/csv are machine-readable: their payload owns stdout so it can
+    // be piped, and they're never colorized.
+    const machineFormat =
+      options.format === 'json' || options.format === 'ndjson' || options.format === 'csv';
+
+    // Keep stdout clean for machine formats so they can be piped; progress goes
+    // to stderr. --quiet suppresses it entirely, which also helps piping.
     if (!options.quiet) {
       const banner = `\nSearching ${engineLabel} for: "${options.query}"\n`;
-      if (options.json) {
+      if (machineFormat) {
         console.error(banner);
       } else {
         console.log(banner);
@@ -155,10 +169,15 @@ async function main() {
 
     const color = resolveColor({
       mode: options.color,
-      json: options.json,
+      json: machineFormat,
       isTTY: Boolean(process.stdout.isTTY)
     });
-    const formatted = formatResults(results, { json: options.json, color });
+    const formatted = formatResults(results, {
+      format: options.format,
+      color,
+      descLength: options.descLength,
+      truncate: options.truncate
+    });
 
     console.log(formatted);
   } catch (error) {
