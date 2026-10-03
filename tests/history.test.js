@@ -2,7 +2,7 @@ import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 
-import { resolveHistoryPath, record, list, clear } from '../src/history.js';
+import { resolveHistoryPath, record, list, clear, resolveReplay } from '../src/history.js';
 
 describe('history/resolveHistoryPath', () => {
   test('prefers GOGL_HISTORY_FILE', () => {
@@ -93,5 +93,47 @@ describe('history/record + list + clear', () => {
       writeFileSync: () => { throw new Error('disk full'); }
     };
     expect(record({ query: 'x', engine: 'google', count: 1 }, { env, fs: brokenFs })).toBe(false);
+  });
+});
+
+describe('history/resolveReplay', () => {
+  const entries = [
+    { query: 'rust', engine: 'duckduckgo', count: 5, ts: 3 },
+    { query: 'nodejs', engine: 'google', count: 10, ts: 2 },
+    { query: 'go', engine: 'google', count: 8, ts: 1 }
+  ]; // newest-first, as list() returns
+
+  test('defaults to the most recent entry (index 1)', () => {
+    expect(resolveReplay(entries, 1)).toEqual({ query: 'rust', engine: 'duckduckgo' });
+  });
+
+  test('resolves the n-th most recent entry', () => {
+    expect(resolveReplay(entries, 2)).toEqual({ query: 'nodejs', engine: 'google' });
+    expect(resolveReplay(entries, 3)).toEqual({ query: 'go', engine: 'google' });
+  });
+
+  test('empty history is an error', () => {
+    expect(resolveReplay([], 1)).toEqual({ error: 'No search history to replay.' });
+    expect(resolveReplay(undefined, 1).error).toMatch(/No search history/);
+  });
+
+  test('an index past the end is an error naming the count', () => {
+    expect(resolveReplay(entries, 4).error).toMatch(/No history entry #4 to replay \(only 3 entries\)/);
+    expect(resolveReplay([entries[0]], 2).error).toMatch(/only 1 entry\b/);
+  });
+
+  test('a non-positive or non-integer index is an error', () => {
+    expect(resolveReplay(entries, 0).error).toMatch(/positive integer/);
+    expect(resolveReplay(entries, -1).error).toMatch(/positive integer/);
+    expect(resolveReplay(entries, 1.5).error).toMatch(/positive integer/);
+  });
+
+  test('an entry with no usable query is an error', () => {
+    expect(resolveReplay([{ engine: 'google' }], 1).error).toMatch(/no query to replay/);
+    expect(resolveReplay([{ query: '   ', engine: 'google' }], 1).error).toMatch(/no query to replay/);
+  });
+
+  test('tolerates a missing engine (returns undefined engine)', () => {
+    expect(resolveReplay([{ query: 'x' }], 1)).toEqual({ query: 'x', engine: undefined });
   });
 });
