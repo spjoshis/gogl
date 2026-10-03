@@ -93,3 +93,41 @@ re-search to act on another.
 
 - Fewer repeated identical searches (same query re-run back-to-back) in history.
 - Qualitative: a single search can drive multiple open/copy actions.
+
+---
+
+# Addendum — History replay (`--last`) · 2026-10-03
+
+## Objective
+Let a user re-run a past search without retyping it. History was previously
+view/clear only.
+
+## Functional requirements
+1. `--last` replays the most recent search; `--last n` the n-th most recent
+   (newest = 1); `--last=n` form supported.
+2. Reproduces the stored **query and engine**. Cannot be combined with a
+   positional query or `--engine` (both contradict "reproduce this search");
+   either combination is a parser error, exit 1.
+3. All other flags apply to the replayed run (e.g. `--last --json`,
+   `--last --format table`).
+4. Empty history, a non-positive index, or an out-of-range index → a clear
+   stderr error and exit 1, with no search performed.
+5. A stored engine that is no longer supported falls back to the default
+   silently (never crashes a replay).
+
+## Acceptance criteria (Given → When → Then)
+- **AC1** — Given a non-empty history, When `--last`, Then the most recent
+  query runs again on its original engine.
+- **AC2** — Given ≥3 entries, When `--last 3`, Then the 3rd-most-recent runs.
+- **AC3** — Given empty history, When `--last`, Then exit 1 "No search history
+  to replay." and nothing is searched.
+- **AC4** — Given `--last` + a query, or `--last` + `--engine`, Then exit 1 with
+  a message explaining the conflict.
+- **AC5** — Given `--last=0` / negative, Then exit 1 "must be a positive
+  integer".
+
+## Scope
+- **In:** `--last [n]`, reproduce query+engine, conflict rules, errors, tests.
+- **Out/future:** replaying result count; interactive history picker; fuzzy
+  history search. Replaying the stored engine (not just query) is intentionally
+  in scope here.

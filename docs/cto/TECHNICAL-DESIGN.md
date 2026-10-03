@@ -86,3 +86,35 @@ handling, so `-i` composes with (does not replace) the existing flags.
 Additive: a new default-off flag, a new module, no changes to `search()`,
 result shape, output formats, or any existing flag. All 377 prior tests stay
 green.
+
+---
+
+# Addendum — History replay (`--last`) · 2026-10-03
+
+## Components
+| File | Change |
+|------|--------|
+| `src/history.js` | **New** pure `resolveReplay(entries, index)` → `{query,engine}` or `{error}` |
+| `src/parser.js` | `--last`/`--last=n` → `replayRequested`+`replayIndex` (optional numeric arg like `--open`); conflict guards vs a query and `--engine` |
+| `bin/gogl.js` | Resolve replay (via `listHistory({limit:0})` + `resolveReplay`) **before** the empty-query check; set `options.query`/`options.engine`; validate stored engine with `resolveEngine`, else fall back |
+| tests | `history.test.js` (resolveReplay), `parser.test.js` (`--last`), `cli.test.js` (empty-history exit 1 + query-conflict exit 1) |
+
+## Key decisions
+- **Reproduce query + engine.** `--engine`/query are rejected alongside `--last`
+  rather than silently merged, so precedence stays unambiguous. Ambient
+  env/config engine is overridden by the stored engine (that's "reproduce").
+- **Resolve in bin, not parser.** The parser stays pure/offline; history I/O
+  lives in bin at call time (same separation as the search itself).
+- **`resolveReplay` returns `{error}`** instead of throwing, so the caller owns
+  the exit path — consistent with the best-effort, never-crash history module.
+
+## Security / performance / reliability
+- No new surface: reads the existing local JSONL history; stored query is passed
+  as data to the same search path (no shell/interp). Corrupt lines already
+  skipped by `list()`; an entry without a query → explicit error.
+- One extra file read only when `--last` is used. Fails fast (before any browser)
+  on empty/out-of-range history.
+
+## Backward compatibility
+Additive; no change to `search()`, result shape, or existing flags. Stacked on
+v1.10.0 (interactive) → v1.11.0.

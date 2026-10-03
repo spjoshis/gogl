@@ -15,7 +15,7 @@ import { DEFAULT_TTL_SECONDS, resolveCacheDir, clear as clearCache } from '../sr
 import { initConfig, resolveConfigPath } from '../src/config.js';
 import { openUrl } from '../src/open.js';
 import { copyToClipboard } from '../src/copy.js';
-import { record as recordHistory, list as listHistory, clear as clearHistory } from '../src/history.js';
+import { record as recordHistory, list as listHistory, clear as clearHistory, resolveReplay } from '../src/history.js';
 import { runInteractive } from '../src/interactive.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
@@ -45,6 +45,7 @@ Options:
       --copy [n]          Copy result n's URL (default 1) to the clipboard
   -i, --interactive       After searching, pick results to open/copy/print at a prompt
       --history [clear]   List recent searches, or 'clear' to wipe them
+      --last [n]          Re-run a previous search (n-th most recent; default 1)
       --no-history        Do not record this search in history
   -q, --quiet             Suppress the "Searching..." progress banner
   -r, --retries <n>       Retry attempts on failure (default 2)
@@ -262,6 +263,30 @@ async function main() {
       console.log(entries.map(formatHistoryLine).join('\n'));
     }
     process.exit(0);
+  }
+
+  // --last: pull the query (and its original engine) from history and re-run it.
+  // Resolved here, before the empty-query check, so the replayed query flows
+  // through the normal search path. An explicit --engine is rejected by the
+  // parser, but a stale stored engine (one since removed) falls back silently.
+  if (options.replayRequested) {
+    const resolved = resolveReplay(listHistory({ limit: 0 }), options.replayIndex);
+    if (resolved.error) {
+      console.error(`Error: ${resolved.error}`);
+      process.exit(1);
+    }
+    options.query = resolved.query;
+    if (resolved.engine) {
+      try {
+        resolveEngine(resolved.engine);
+        options.engine = resolved.engine;
+      } catch {
+        /* stored engine is no longer supported; keep the resolved default */
+      }
+    }
+    if (!options.quiet) {
+      console.error(`Replaying search: "${options.query}"`);
+    }
   }
 
   if (!options.query) {

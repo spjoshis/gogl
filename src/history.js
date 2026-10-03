@@ -86,6 +86,34 @@ export function list({ env = process.env, fs = nodeFs, limit = 50 } = {}) {
 }
 
 /**
+ * Resolve a history entry for replay. `entries` must be newest-first (as `list`
+ * returns), and `index` is 1-based (1 = most recent). Pure and injectable so it
+ * can be unit-tested without touching the filesystem; returns an `{ error }`
+ * object rather than throwing, so the caller decides how to surface it.
+ *
+ * @param {Array<{query: string, engine?: string}>} entries - newest-first
+ * @param {number} index - 1-based position (1 = most recent)
+ * @returns {{ query: string, engine?: string } | { error: string }}
+ */
+export function resolveReplay(entries, index) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { error: 'No search history to replay.' };
+  }
+  if (!Number.isInteger(index) || index < 1) {
+    return { error: `--last must be a positive integer (got ${index}).` };
+  }
+  if (index > entries.length) {
+    const have = entries.length === 1 ? '1 entry' : `${entries.length} entries`;
+    return { error: `No history entry #${index} to replay (only ${have}).` };
+  }
+  const entry = entries[index - 1];
+  if (!entry || typeof entry.query !== 'string' || entry.query.trim() === '') {
+    return { error: `History entry #${index} has no query to replay.` };
+  }
+  return { query: entry.query, engine: entry.engine };
+}
+
+/**
  * Clear the history file. Returns the number of entries removed. A missing
  * file counts as zero. Never throws.
  *
