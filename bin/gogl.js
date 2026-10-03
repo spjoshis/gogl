@@ -2,6 +2,7 @@
 
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { createInterface } from 'node:readline';
 
 import { search } from '../src/index.js';
 import { parseArgs, MAX_RESULTS } from '../src/parser.js';
@@ -15,6 +16,7 @@ import { initConfig, resolveConfigPath } from '../src/config.js';
 import { openUrl } from '../src/open.js';
 import { copyToClipboard } from '../src/copy.js';
 import { record as recordHistory, list as listHistory, clear as clearHistory } from '../src/history.js';
+import { runInteractive } from '../src/interactive.js';
 
 const HELP_TEXT = `Usage: @google [options] <query>
 
@@ -41,6 +43,7 @@ Options:
       --clear-cache        Delete all cached results and exit
       --open [n]          Open result n (default 1) in the default browser
       --copy [n]          Copy result n's URL (default 1) to the clipboard
+  -i, --interactive       After searching, pick results to open/copy/print at a prompt
       --history [clear]   List recent searches, or 'clear' to wipe them
       --no-history        Do not record this search in history
   -q, --quiet             Suppress the "Searching..." progress banner
@@ -148,6 +151,53 @@ function formatHistoryLine(entry) {
   const when = timeAgo(entry.ts).padStart(7);
   const count = `${entry.count} ${entry.count === 1 ? 'result' : 'results'}`;
   return `${when}  ${entry.query}  (${entry.engine}, ${count})`;
+}
+
+// Drive the interactive prompt loop (src/interactive.js) with a real readline
+// interface. Guards: nothing to do with zero results, and we can't prompt
+// without a TTY on stdin (e.g. when piped), so we skip with a note rather than
+// hang a non-interactive pipeline.
+async function runInteractivePrompt(results) {
+  if (results.length === 0) {
+    return;
+  }
+  if (!process.stdin.isTTY) {
+    console.error('Note: --interactive needs a terminal (stdin is not a TTY); skipping.');
+    return;
+  }
+
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  rl.on('SIGINT', () => rl.close()); // Ctrl-C exits the loop cleanly
+
+  // Resolve the next line, or null when the stream closes (Ctrl-D / SIGINT).
+  const prompt = () => new Promise((resolve) => {
+    let settled = false;
+    const onClose = () => { if (!settled) { settled = true; resolve(null); } };
+    rl.once('close', onClose);
+    rl.question('\ngogl> ', (answer) => {
+      if (!settled) {
+        settled = true;
+        rl.removeListener('close', onClose);
+        resolve(answer);
+      }
+    });
+  });
+
+  try {
+    await runInteractive(results, {
+      prompt,
+      log: (msg) => console.log(msg),
+      open: (url) => openUrl(url),
+      copy: (url) => copyToClipboard(url)
+    });
+  } finally {
+    rl.close();
+    // Readline resumes the stdin TTY; unref it so the process can exit once the
+    // loop is done instead of hanging on an open terminal handle.
+    if (typeof process.stdin.unref === 'function') {
+      process.stdin.unref();
+    }
+  }
 }
 
 async function main() {
@@ -323,6 +373,10 @@ async function main() {
         console.error(`Error: could not copy to the clipboard: ${copyError.message}`);
         process.exit(1);
       }
+    }
+
+    if (options.interactive) {
+      await runInteractivePrompt(results);
     }
   } catch (error) {
     if (error.message.includes('timeout')) {

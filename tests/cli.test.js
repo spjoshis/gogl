@@ -66,6 +66,19 @@ describe('CLI (non-network paths)', () => {
     expect(stdout).toContain('Usage: @google');
   });
 
+  test('--help documents --interactive', () => {
+    const { status, stdout } = runCli(['--help']);
+    expect(status).toBe(0);
+    expect(stdout).toContain('--interactive');
+  });
+
+  test('-i is a recognized flag (does not error as unknown)', () => {
+    // --help short-circuits before any network use, so this just proves -i parses.
+    const { status, stderr } = runCli(['-i', '--help']);
+    expect(status).toBe(0);
+    expect(stderr).not.toMatch(/unknown option/i);
+  });
+
   test('invalid --cache-ttl exits 1 with an error on stderr', () => {
     const { status, stderr } = runCli(['--cache-ttl', 'abc', 'foo']);
     expect(status).toBe(1);

@@ -838,6 +838,28 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--interactive', () => {
+    test('defaults to false', () => {
+      expect(parseArgs(['nodejs']).interactive).toBe(false);
+    });
+
+    test('-i sets interactive and keeps the query', () => {
+      const result = parseArgs(['-i', 'nodejs', 'streams']);
+      expect(result.interactive).toBe(true);
+      expect(result.query).toBe('nodejs streams');
+    });
+
+    test('--interactive sets interactive', () => {
+      expect(parseArgs(['--interactive', 'nodejs']).interactive).toBe(true);
+    });
+
+    test('is not confused with a query token', () => {
+      const result = parseArgs(['interactive']);
+      expect(result.interactive).toBe(false);
+      expect(result.query).toBe('interactive');
+    });
+  });
+
   describe('config actions (--init-config / --show-config / --force)', () => {
     test('flags default to false', () => {
       const result = parseArgs(['x']);

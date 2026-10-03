@@ -1,83 +1,51 @@
-# CODE-REVIEW.md — Alternate Search Engine (DuckDuckGo)
+# CODE-REVIEW.md — Interactive result selection (`-i`)
 
-_Self-review (Gate 5) + CTO final review (Gate 6). 2026-09-21._
+_Self/peer review (Gate 5) + CTO final review (Gate 6). 2026-10-03._
 
 ## Gate 5 — Peer review
 
-Reviewed the full diff and final source against the spec; ran the test suite
-(with coverage) and exercised the non-network CLI paths directly.
+Reviewed the full diff against the spec; ran the suite (16 suites, 406 passed,
+5 skipped live-browser) and exercised the non-network CLI paths plus a
+`readline`-over-`PassThrough` integration harness.
 
-**Verified correct:** engine registry lookup/validation, `--engine` /
-`--engine=` parsing mirroring the existing `--results` pattern exactly,
-`--help`/`--version` precedence over an invalid `--engine`, DuckDuckGo
-redirect-URL unwrapping (`/l/?uddg=`), Google extraction logic unchanged
-(moved verbatim, not rewritten), default-engine backward compatibility
-(no-flag behavior identical to pre-change), library API (`search(query,
-{engine})`) rejecting an unknown engine before any browser launch, 100%
-statement coverage on `parser.js` and `src/engines/*`.
+**Verified correct:**
 
-**Verdict:** APPROVE-WITH-NITS (no blockers, no correctness bugs).
+- `parseInteractiveCommand` grammar: bare number → open; `o/c/p` (+ `open/copy/
+  print`) with/without index; `o2` spacing; case-insensitivity; `q/quit/exit`;
+  `h/help/?`; empty → noop. Bounds + malformed input all return `error` and
+  never throw (incl. `0`, `-1`, `6` of 5, `3 4`, `open two`, `q1`).
+- `runInteractive` dispatch, logging, continue-after-error, EOF/quit exit,
+  empty-results early return, and open-failure containment — all asserted.
+- `-i`/`--interactive` parses as a boolean exactly like `-q`, does not capture a
+  query token, defaults false, and loses to `--help`/`--version` (deferred-error
+  path unchanged).
+- Security: open/copy reuse the argv/stdin-based helpers; no shell, no interp.
 
-### Findings and resolutions
+**Issue caught and fixed during review:**
 
-| # | Sev | Finding | Resolution |
-|---|-----|---------|-----------|
-| 1 | Minor | `parser.js` reimplemented the "unknown engine" error message that `engines/index.js#resolveEngine` already produces — duplicated string, drift risk if one changes without the other | **Fixed.** `parser.js` now calls `resolveEngine(rawEngine)` inside try/catch and reuses its thrown error instead of re-deriving the message. |
-| 2 | Nit | DuckDuckGo `extract`'s `uddg` redirect-unwrap had no test for a plain (non-redirect) href, which is the more common case for some result types | **Fixed.** Added a test asserting a plain href passes through unchanged. |
-| 3 | Nit | No test asserted `--engine` is listed in `--help` output, so a future edit could silently drop it | **Fixed.** `cli.test.js` now asserts `--help` output contains `--engine`. |
-
-### Known limitation (documented, out of scope for this cycle)
-
-Neither engine's live extraction could be validated against a real,
-non-challenged results page in this session: Google returned its existing
-CAPTCHA block (per Cycle 1), and DuckDuckGo returned its own bot-detection
-challenge ("Select all squares containing a duck") — confirmed independently
-via a local Playwright launch, the gateway's `web_fetch` tool, and the
-gateway's own DuckDuckGo-backed `web_search` tool, all three hitting the same
-block. This is evidence the block is broad (not specific to one IP or tool),
-not evidence the DuckDuckGo selectors are wrong — they match the
-publicly-documented `html.duckduckgo.com` structure used by other
-open-source scrapers, at the same confidence level Cycle 1 had for the
-now-shipped Google selectors. Both engines degrade gracefully to `[]` /
-"No results found." rather than throwing when blocked. Flagged as a Cycle 3
-candidate: add a live DuckDuckGo assertion once verifiable from an
-unblocked network.
+- **Process hang on a real TTY.** Initial glue called `rl.close()` only; because
+  `readline` resumes the stdin TTY, the process would hang after quitting the
+  loop. The `PassThrough` smoke test masked it (not a TTY). Fixed by adding
+  `process.stdin.unref()` in the `finally`. Re-verified exit under a hang-guard.
 
 ## Gate 6 — CTO final review
 
-- **Product:** solves the reliability gap identified in Cycle 1 (Google
-  block with no workaround) by giving users an explicit escape hatch
-  (`--engine duckduckgo`), without changing default behavior for existing
-  users. Journeys A/B/C from the spec are all satisfied.
-- **Engineering:** additive, backward compatible, no new dependencies,
-  extracted (not duplicated) the existing Google logic into its own module,
-  introduced one new sub-boundary (`src/engines/`) proportional to the
-  feature — not over-abstracted (no plugin loader, no dynamic registration
-  for two engines).
-- **Quality:** 73 unit tests pass (4 live tests remain opt-in, unchanged);
-  100% statement coverage on the new/changed non-browser code
-  (`parser.js`, `src/engines/*`); acceptance criteria covered at both unit
-  and CLI level.
-- **Security/privacy:** engine name is allowlist-validated, never
-  interpolated raw; DuckDuckGo's redirect URLs are decoded to plain data,
-  never re-navigated or evaluated; no new persisted data.
-- **Ops:** safe to ship as minor `1.2.0`; no migration, no feature flag;
-  rollback is a revert. **Note:** merging to `main` triggers the existing
-  path-filtered `publish.yml` workflow, which will publish `1.2.0` to npm
-  automatically — this is a real, effectively-irreversible action (npm
-  doesn't allow unpublishing after 72h) and is called out explicitly for the
-  merge decision.
+- **Product:** solves the stated "act on many results from one search" gap; the
+  journeys for the scripter (non-TTY skip) and headless user (open-failure
+  containment) are both covered by ACs and tests.
+- **Engineering:** logic isolated in a pure module with injected I/O; `bin` glue
+  is thin and the only untested seam (validated manually). Consistent with the
+  `open.js`/`copy.js` precedent — no new patterns, no new deps.
+- **Simplicity:** declined arrow-key/fuzzy TUI (would pull a dependency) and
+  in-prompt re-search (scope creep). A bare number = open matches the existing
+  `--open` default and `googler`'s omniprompt.
+- **Security/Ops:** no new network/fs/secret surface; additive and backward
+  compatible; no migration; rollback = revert. Default-off, CLI-only.
 
-**CTO decision:** APPROVED for PR, pending the repo owner's explicit
-go-ahead to push and merge (this cycle's process gate — publishing to npm is
-not something to wave through automatically).
+**Known limitations (documented, accepted):**
 
-## Cycle 3 candidates (discovered during this cycle, not yet actioned)
+- The `readline` glue in `bin` is not a committed automated test (needs a live
+  stream/TTY); covered by the pure loop tests + a manual harness.
+- No `open all`/`copy all` yet (next-cycle candidate alongside history replay).
 
-- Opt-in live DuckDuckGo test once a non-blocked network is available to
-  confirm current markup.
-- Automatic engine failover was considered and explicitly rejected for this
-  cycle (see PRODUCT-SPEC §10) — revisit only if manual `--engine` switching
-  proves to be a common real-world workaround.
-- Selector resilience work carried over from Cycle 1's backlog (#4) remains
-  open and now applies to two engines instead of one.
+**Verdict:** Meets the production bar. Approved for PR.
