@@ -91,6 +91,7 @@ npx @spjoshis/gogl "your query"
 | `--copy [n]` | Copy result `n`'s URL (default 1) to the clipboard |
 | `-i, --interactive` | After searching, pick results to open/copy/print at a prompt (see [Interactive mode](#-interactive-mode)) |
 | `--history [clear]` | List recent searches, or `clear` to wipe them (see [Search history](#-search-history)) |
+| `--last [n]` | Re-run a previous search (the `n`-th most recent; default 1) — see [Search history](#-search-history) |
 | `--no-history` | Do not record this search in history |
 | `--no-config` | Skip the [config file](#-configuration-file) for this run |
 | `--init-config` | Write a starter [config file](#-configuration-file) and exit (`--force` to overwrite) |
@@ -121,6 +122,8 @@ npx @spjoshis/gogl "your query"
 @google -i nodejs streams                # search, then pick results to open/copy at a prompt
 @google --format urls nodejs | head -3   # just the URLs, one per line
 @google --history                        # list your recent searches
+@google --last                           # re-run your most recent search
+@google --last 3                         # re-run the 3rd most recent search
 @google --history clear                  # wipe your search history
 @google --help                     # usage
 ```
@@ -394,9 +397,18 @@ searched for.
 
 ```bash
 @google --history         # list recent searches, newest first
+@google --last            # re-run your most recent search
+@google --last 2          # re-run the 2nd most recent search
 @google --history clear   # wipe the history
 @google --no-history foo  # run a search without recording it
 ```
+
+**Replaying a search** — `--last [n]` re-runs a search from your history: bare
+`--last` repeats the most recent one, `--last 3` the third most recent (newest
+is 1). It reproduces the original **query and engine**, so it can't be combined
+with a query of its own or an explicit `--engine`. Other flags apply fresh, so
+`@google --last --json` replays your last search as JSON. With no history (or an
+out-of-range number) it exits with a clear error and runs nothing.
 
 - **Local only:** history is stored on your machine and **never transmitted**.
 - **Location:** `$XDG_STATE_HOME/gogl/history.jsonl`, or
@@ -771,6 +783,7 @@ Planned features and improvements:
 - [x] Search history
 - [x] Configuration file support
 - [x] Interactive result selection
+- [x] Replay a previous search (`--last`)
 
 ## 📊 Stats
 

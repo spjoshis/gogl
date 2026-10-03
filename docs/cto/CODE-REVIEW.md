@@ -49,3 +49,31 @@ Reviewed the full diff against the spec; ran the suite (16 suites, 406 passed,
 - No `open all`/`copy all` yet (next-cycle candidate alongside history replay).
 
 **Verdict:** Meets the production bar. Approved for PR.
+
+---
+
+# Addendum — History replay (`--last`) · 2026-10-03
+
+## Gate 5 — Peer review
+Ran the suite (16 suites, 424 passed, 5 skipped) and exercised the CLI.
+
+**Verified:** `resolveReplay` index math (newest=1), all error branches
+(empty/0/negative/non-integer/out-of-range/no-query), missing-engine tolerance;
+parser `--last`/`--last=n`/numeric-arg consumption, and both conflict guards
+(query, `--engine`) with `--help` still winning; bin replays **query + engine**
+end-to-end (seeded history: `--last` → newest query on its engine, `--last 2` →
+2nd-newest), and a stale stored engine falls back without crashing. CLI: empty
+history → exit 1 before any search; `--last foo` → exit 1.
+
+## Gate 6 — CTO final review
+- **Product:** closes the history loop (view/clear → actually re-run). Conflict
+  rules keep "reproduce" unambiguous.
+- **Engineering:** pure resolver + thin bin glue; resolution placed before the
+  empty-query check so the replayed query uses the normal search path — no
+  duplication. Consistent with `--open`/`--copy` arg handling.
+- **Security/Ops:** no new surface; additive; rollback = revert; no migration.
+- **Known limitation:** the happy-path *search* after replay isn't automated
+  (needs a live browser); the resolution glue was verified manually with seeded
+  history, and `resolveReplay` is fully unit-tested.
+
+**Verdict:** meets the production bar. Approved for PR (stacked on #20).

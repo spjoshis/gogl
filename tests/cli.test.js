@@ -79,6 +79,31 @@ describe('CLI (non-network paths)', () => {
     expect(stderr).not.toMatch(/unknown option/i);
   });
 
+  test('--help documents --last', () => {
+    const { status, stdout } = runCli(['--help']);
+    expect(status).toBe(0);
+    expect(stdout).toContain('--last');
+  });
+
+  test('--last with no history exits 1 before any search', () => {
+    const dir = mkdtempSync(path.join(os.tmpdir(), 'gogl-replay-cli-'));
+    try {
+      const { status, stderr } = runCli(['--last'], {
+        GOGL_HISTORY_FILE: path.join(dir, 'missing.jsonl')
+      });
+      expect(status).toBe(1);
+      expect(stderr).toMatch(/no search history to replay/i);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  test('--last combined with a query exits 1 (parser error)', () => {
+    const { status, stderr } = runCli(['--last', 'nodejs']);
+    expect(status).toBe(1);
+    expect(stderr).toMatch(/--last cannot be combined with a query/i);
+  });
+
   test('invalid --cache-ttl exits 1 with an error on stderr', () => {
     const { status, stderr } = runCli(['--cache-ttl', 'abc', 'foo']);
     expect(status).toBe(1);

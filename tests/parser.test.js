@@ -860,6 +860,45 @@ describe('parseArgs', () => {
     });
   });
 
+  describe('--last (replay)', () => {
+    test('defaults to not requested, index 1', () => {
+      const result = parseArgs(['nodejs']);
+      expect(result.replayRequested).toBe(false);
+      expect(result.replayIndex).toBe(1);
+    });
+
+    test('bare --last requests replay of the most recent search', () => {
+      const result = parseArgs(['--last']);
+      expect(result.replayRequested).toBe(true);
+      expect(result.replayIndex).toBe(1);
+      expect(result.query).toBe('');
+    });
+
+    test('consumes a numeric argument as the index', () => {
+      expect(parseArgs(['--last', '3']).replayIndex).toBe(3);
+    });
+
+    test('the = form works', () => {
+      expect(parseArgs(['--last=2']).replayIndex).toBe(2);
+    });
+
+    test('rejects a non-positive index', () => {
+      expect(() => parseArgs(['--last=0'])).toThrow(/--last must be a positive integer/);
+    });
+
+    test('cannot be combined with a query', () => {
+      expect(() => parseArgs(['--last', 'nodejs'])).toThrow(/--last cannot be combined with a query/);
+    });
+
+    test('cannot be combined with --engine', () => {
+      expect(() => parseArgs(['--last', '--engine', 'duckduckgo'])).toThrow(/--last cannot be combined with --engine/);
+    });
+
+    test('--help still wins over a bad --last combination', () => {
+      expect(parseArgs(['--help', '--last', 'nodejs']).help).toBe(true);
+    });
+  });
+
   describe('config actions (--init-config / --show-config / --force)', () => {
     test('flags default to false', () => {
       const result = parseArgs(['x']);

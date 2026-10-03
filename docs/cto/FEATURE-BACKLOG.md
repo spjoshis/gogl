@@ -169,3 +169,20 @@ Reuses existing `openUrl`/`copyToClipboard`; CLI-only (no env/config default)
 so non-TTY pipelines and scripts are never surprised. Deferred #9/#10 on the
 same live-verification evidence bar used every prior cycle. Next candidate:
 #2 history replay.
+
+## Cycle: History replay (2026-10-03, same session, stacked on interactive)
+
+Selected **#2 from the table above — history replay (`--last [n]`)** — as the
+next feature once interactive mode was done, since history was view/clear only
+with no way to re-run a past search. Shipped stacked on `feat/interactive-mode`
+(both touch `parser.js`/`bin`; stacking avoids the version/same-file conflict
+dance and enforces merge order).
+
+- **`--last [n]`** replays the n-th most recent search (newest = 1; bare = most
+  recent), reproducing the stored **query + engine**. Rejected when combined
+  with a query or `--engine` (would contradict "run that search again"); other
+  flags apply fresh. Empty/out-of-range history → clear error, exit 1, no
+  search run.
+- Pure `resolveReplay(entries, index)` in `history.js`; bin resolves it before
+  the empty-query check so the replayed query flows through the normal path.
+- v1.11.0. Tests 406 → 424. Next candidate: #3 `--open all`/`--copy all`.

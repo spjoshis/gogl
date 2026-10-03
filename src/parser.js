@@ -69,6 +69,8 @@ export function parseArgs(argv, env = process.env) {
     openIndex: undefined,
     copyIndex: undefined,
     historyAction: undefined,
+    replayRequested: false,
+    replayIndex: 1,
     history: readEnvHistory(env, envWarnings, configDefaults.history)
   };
 
@@ -114,6 +116,8 @@ export function parseArgs(argv, env = process.env) {
   let rawOpen = null;
   let sawCopy = false;
   let rawCopy = null;
+  let sawLast = false;
+  let rawLast = null;
   // Errors are deferred so that --help / --version always win over a bad flag.
   let deferredError = null;
 
@@ -227,6 +231,25 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token.startsWith('--history=')) {
       options.historyAction = token.slice('--history='.length) === 'clear' ? 'clear' : 'list';
+      continue;
+    }
+    if (token === '--last') {
+      // Optional value, same rule as --open/--copy: consume the next token only
+      // if it's a number, so `--last nodejs` isn't misread (nodejs stays query,
+      // which then trips the "can't combine --last with a query" guard below).
+      const value = argv[i + 1];
+      if (value !== undefined && /^\d+$/.test(value)) {
+        rawLast = value;
+        i++;
+      } else {
+        rawLast = '1';
+      }
+      sawLast = true;
+      continue;
+    }
+    if (token.startsWith('--last=')) {
+      rawLast = token.slice('--last='.length);
+      sawLast = true;
       continue;
     }
     if (token === '--color') {
@@ -579,6 +602,15 @@ export function parseArgs(argv, env = process.env) {
     }
   }
 
+  if (sawLast) {
+    options.replayRequested = true;
+    try {
+      options.replayIndex = normalizePositiveInt(rawLast, '--last');
+    } catch (error) {
+      deferredError = deferredError || error;
+    }
+  }
+
   // Resolve the effective output format across the two knobs (--format and the
   // legacy --json) and their env+config defaults. Precedence is tiered by
   // source (CLI > env > config); within a tier an explicit format beats the
@@ -602,6 +634,18 @@ export function parseArgs(argv, env = process.env) {
     options.format = options.json ? 'json' : 'plain';
   }
   options.json = options.format === 'json';
+
+  // A replay reproduces a past search, so it can't also be given a fresh query
+  // or a conflicting engine; those would contradict "run that search again".
+  if (options.replayRequested) {
+    if (queryParts.length > 0) {
+      deferredError = deferredError || new Error('--last cannot be combined with a query');
+    }
+    if (sawEngine) {
+      deferredError = deferredError ||
+        new Error('--last cannot be combined with --engine (a replay reuses its original engine)');
+    }
+  }
 
   if (deferredError) {
     throw deferredError;
