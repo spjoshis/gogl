@@ -45,6 +45,7 @@ export function parseArgs(argv, env = process.env) {
     color: 'auto',
     dedupe: true,
     quiet: false,
+    interactive: false,
     help: false,
     version: false,
     envWarnings,
@@ -242,6 +243,10 @@ export function parseArgs(argv, env = process.env) {
     }
     if (token === '-q' || token === '--quiet') {
       options.quiet = true;
+      continue;
+    }
+    if (token === '-i' || token === '--interactive') {
+      options.interactive = true;
       continue;
     }
     if (token === '-n' || token === '--results') {

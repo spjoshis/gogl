@@ -89,6 +89,7 @@ npx @spjoshis/gogl "your query"
 | `--date-range <d\|w\|m\|y>` | Restrict results to the past day/week/month/year (default: no restriction) |
 | `--open [n]` | Open result `n` (default 1) in your default browser |
 | `--copy [n]` | Copy result `n`'s URL (default 1) to the clipboard |
+| `-i, --interactive` | After searching, pick results to open/copy/print at a prompt (see [Interactive mode](#-interactive-mode)) |
 | `--history [clear]` | List recent searches, or `clear` to wipe them (see [Search history](#-search-history)) |
 | `--no-history` | Do not record this search in history |
 | `--no-config` | Skip the [config file](#-configuration-file) for this run |
@@ -117,6 +118,7 @@ npx @spjoshis/gogl "your query"
 @google --no-truncate --engine duckduckgo rust  # full descriptions
 @google --open 2 nodejs streams          # open the 2nd result in your browser
 @google --copy nodejs streams            # copy the top result's URL to the clipboard
+@google -i nodejs streams                # search, then pick results to open/copy at a prompt
 @google --format urls nodejs | head -3   # just the URLs, one per line
 @google --history                        # list your recent searches
 @google --history clear                  # wipe your search history
@@ -405,6 +407,46 @@ searched for.
   with `GOGL_HISTORY=false` or `history: false` in your [config file](#-configuration-file).
 - **Resilient:** a missing or damaged history file never breaks a search —
   recording is best-effort and corrupt lines are skipped when listing.
+
+## 🧭 Interactive mode
+
+Normally `--open`/`--copy` make you read a result number off the screen and then
+re-run the whole search to act on it. Interactive mode searches **once** and then
+drops into a small prompt so you can act on any result without searching again.
+
+```bash
+@google -i nodejs streams
+```
+
+```
+1. Node.js
+   URL: https://nodejs.org/
+   ...
+
+gogl> 2        # open result 2 in your browser
+gogl> c 3      # copy result 3's URL to the clipboard
+gogl> p 1      # print result 1's title, URL, and description
+gogl> h        # show the command help
+gogl> q        # quit (Ctrl-D / Ctrl-C also exit)
+```
+
+| At the `gogl>` prompt | Does |
+|-----------------------|------|
+| `<n>` | Open result `<n>` in your browser (same as `o <n>`) |
+| `o <n>` | Open result `<n>` in your browser |
+| `c <n>` | Copy result `<n>`'s URL to the clipboard |
+| `p <n>` | Print result `<n>`'s title, URL, and description |
+| `h` or `?` | Show the command help |
+| `q` | Quit (empty line re-prompts) |
+
+- **Terminal only:** interactive mode needs a real terminal on stdin. If stdin
+  is piped or redirected (`@google -i foo | cat`), it prints a note to stderr and
+  skips the prompt rather than hanging a non-interactive pipeline — the formatted
+  results are still printed first.
+- **Resilient:** an out-of-range number or an unknown command is reported inline
+  and the prompt keeps running; a failed open/copy (e.g. no browser on a headless
+  box) is reported without crashing the session.
+- `o`/`c`/`p` with no number default to result 1, matching `--open`/`--copy`.
 
 ## 🐛 Troubleshooting
 
@@ -728,6 +770,7 @@ Planned features and improvements:
 - [x] Result deduplication
 - [x] Search history
 - [x] Configuration file support
+- [x] Interactive result selection
 
 ## 📊 Stats
 

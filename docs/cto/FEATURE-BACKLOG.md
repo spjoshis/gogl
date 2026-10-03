@@ -118,3 +118,54 @@ real-world workaround users need. Items #7 (colored output) and #9 (config
 file) remain viable lower-risk fast-follows if reliability work stalls on
 environment access.
 
+
+## Cycle: Interactive mode (2026-10-03)
+
+_Fresh discovery (Gate 1) over the current `src/` at v1.9.0 — the README
+roadmap is fully checked, so candidates come from code evidence, not the
+roadmap. 15 source modules, 377 tests green at cycle start._
+
+### Repository state & evidence
+
+The CLI is mature: search (google/ddg), `--results`, six output formats,
+`--color`, dedupe, `--site`/`--filetype`/`--exclude`/`--region`/`--safe`,
+caching, retries/timeout, `--date-range`, `--open [n]`, `--copy [n]`,
+`--history`, config file + `--init-config`/`--show-config`. Notable code-level
+gaps observed:
+
+- **One-shot actions require a re-run.** `--open [n]`/`--copy [n]`
+  (`bin/gogl.js:282-326`) act on exactly one result, and you must read the
+  number off the screen then run the whole search again to act on another.
+  No "search once, then act on results" loop exists.
+- **History is view-only.** `history.js` records `{query,engine,count,ts}` and
+  `--history` lists/clears, but nothing re-runs a past search.
+- **No field selection** for `json`/`csv` output; no `--open all`/`--copy all`.
+- **Two engines only** (google, ddg); adding a third needs live-DOM
+  verification that this environment can't provide (bot challenges) — held to
+  the same evidence bar as prior cycles.
+
+### Scoring: `(Value × Impact × Confidence) ÷ Complexity`, factors 1–5
+
+| # | Feature | V | I | C | Cx | Score | Notes |
+|---|---------|---|---|---|----|-------|-------|
+| 1 | **Interactive result selection (`-i`)** | 4 | 4 | 5 | 1.5 | **53.3** | Search once, act on many; reuses `openUrl`/`copyToClipboard`; pure, offline-testable core. |
+| 2 | History replay (`--last [n]`) | 3 | 3 | 5 | 1.5 | 30.0 | Closes the history loop; pure resolution logic. Good next cycle. |
+| 3 | `--open all` / `--copy all` | 3 | 3 | 5 | 2 | 22.5 | Small extension of existing one-shot actions. |
+| 4 | Field selection (`--fields title,url`) | 3 | 3 | 4 | 2 | 18.0 | Pure formatter change; helps csv/json consumers. |
+| 5 | Shell completion (bash/zsh) | 3 | 4 | 3 | 2.5 | 14.4 | Nice DX; static-generatable, testable. |
+| 6 | Cache inspection (`--cache-list`/`--cache-prune`) | 2 | 2 | 4 | 2 | 8.0 | Fills out the cache feature; temp-dir testable. |
+| 7 | `--edit-config` (open config in `$EDITOR`) | 2 | 2 | 4 | 2 | 8.0 | Minor convenience over `--init-config`. |
+| 8 | `--pager` / pipe long output to `$PAGER` | 2 | 2 | 3 | 2 | 6.0 | Shell redirection already covers most of this. |
+| 9 | Third engine (Brave/Startpage) | 5 | 4 | 1.5 | 4 | 7.5 | **Deferred:** can't verify live extraction here → demo quality. |
+| 10 | Pagination (`--page`) | 3 | 3 | 1.5 | 3 | 4.5 | **Deferred:** DDG html pagination unreliable; Google-only would be inconsistent. |
+
+### CTO prioritization decision
+
+**Selected: #1 Interactive result selection (`-i`/`--interactive`).** Highest
+score, strongest evidence (the one-shot `--open`/`--copy` design makes the gap
+obvious), and fully offline-verifiable: the command grammar and loop are pure
+functions with injected I/O, so no live browser is needed to prove correctness.
+Reuses existing `openUrl`/`copyToClipboard`; CLI-only (no env/config default)
+so non-TTY pipelines and scripts are never surprised. Deferred #9/#10 on the
+same live-verification evidence bar used every prior cycle. Next candidate:
+#2 history replay.
